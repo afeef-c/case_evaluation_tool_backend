@@ -22,55 +22,33 @@ class OptionSerializer(serializers.ModelSerializer):
         model = Option
         fields = ['id', 'field', 'value', 'description']
 
-# ClientOption Serializer (for custom description)
-class ClientOptionSerializer(serializers.ModelSerializer):
-    option_id = serializers.IntegerField()  # To pass option ID in the request
 
+class ClientOptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClientOption
-        fields = ['option_id', 'custom_description']
+        fields = ['id', 'option', 'custom_description']
 
-# ClientResponse Serializer (handles multiple options)
 class ClientResponseSerializer(serializers.ModelSerializer):
-    field_id = serializers.IntegerField()  # To pass field ID
-    options = ClientOptionSerializer(many=True)  # Nested options
+    client_options = ClientOptionSerializer(many=True)
 
     class Meta:
         model = ClientResponse
-        fields = ['field_id', 'options']
+        fields = ['id', 'submission', 'client_options']
 
-# ClientSubmission Serializer
+    def create(self, validated_data):
+        client_options_data = validated_data.pop('client_options')
+        response = ClientResponse.objects.create(**validated_data)
+
+        for option_data in client_options_data:
+            ClientOption.objects.create(response=response, **option_data)
+
+        return response
+
 class ClientSubmissionSerializer(serializers.ModelSerializer):
-    responses = ClientResponseSerializer(many=True)
-    client_name = serializers.CharField()
+    responses = ClientResponseSerializer(many=True, required=False)
 
     class Meta:
         model = ClientSubmission
-        fields = ['client_name', 'responses']
-
-    # Custom create logic
-    def create(self, validated_data):
-        client_name = validated_data['client_name']
-        responses_data = validated_data['responses']
-
-        # Create Client Submission
-        submission = ClientSubmission.objects.create(client_name=client_name)
-
-        # Loop through responses
-        for response_data in responses_data:
-            field = Field.objects.get(id=response_data['field_id'])
-            response = ClientResponse.objects.create(submission=submission, field=field)
-
-            # Handle selected options
-            for option_data in response_data['options']:
-                option = Option.objects.get(id=option_data['option_id'])
-                ClientOption.objects.create(
-                    response=response,
-                    option=option,
-                    custom_description=option_data.get('custom_description', option.description)
-                )
-
-        return submission
-
+        fields = ['id', 'client_name', 'client_email', 'client_phone', 'company', 'is_submitted', 'responses']
 
 

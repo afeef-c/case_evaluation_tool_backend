@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django.contrib.auth import authenticate, login
 from rest_framework_simplejwt.tokens import RefreshToken
 from .permissions import IsAgencyAdmin, IsCompanyAdmin
-from .serializers import CompanySerializer, CompanyStaffSerializer
+from .serializers import CompanySerializer, CompanyStaffSerializer,ClientSubmissionSerializer
 from django.contrib.auth.models import User
 from .models import *
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -218,6 +218,44 @@ class AddRulesView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+class ClientSubmissionAPIView(APIView):
+
+    def post(self, request):  # Step 1: Create submission and add responses
+        serializer = ClientSubmissionSerializer(data=request.data)
+        if serializer.is_valid():
+            submission = serializer.save()
+            return Response(ClientSubmissionSerializer(submission).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):  # Step 2: Update option description
+        try:
+            submission = ClientSubmission.objects.get(pk=pk)
+            option_id = request.data.get('option_id')
+            new_description = request.data.get('custom_description')
+
+            client_option = ClientOption.objects.get(response__submission=submission, option_id=option_id)
+            client_option.custom_description = new_description
+            client_option.save()
+
+            return Response({'status': 'description updated'}, status=status.HTTP_200_OK)
+        except (ClientSubmission.DoesNotExist, ClientOption.DoesNotExist):
+            return Response({'error': 'Submission or Option not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    def put(self, request, pk):  # Step 3: Final submission and storing PDF
+        try:
+            submission = ClientSubmission.objects.get(pk=pk)
+            pdf_file = request.FILES.get('pdf_file')
+
+            if pdf_file:
+                submission.pdf_file.save(f"submission_{submission.id}.pdf", pdf_file)
+
+            submission.is_submitted = True
+            submission.save()
+
+            return Response({'status': 'submitted', 'pdf_url': submission.pdf_file.url}, status=status.HTTP_200_OK)
+        except ClientSubmission.DoesNotExist:
+            return Response({'error': 'Submission not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
 
