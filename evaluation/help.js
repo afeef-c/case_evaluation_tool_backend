@@ -59,6 +59,7 @@ let rulesData = {
     case_evaluation: "Signed"
 }
 
+
 //Add pdf Template Fields
 let templateData = {
     userId : 1,
@@ -73,8 +74,9 @@ let templateData = {
 
 let clientRes= {
     "client_name": "John Doe",
-    "client_mail":"john@gmail.com",
+    "client_email":"john@gmail.com",
     "client_phone":"7652432321",
+    "company":2,
     "responses": [
         {
             "field_id": 1,
@@ -86,4 +88,5 @@ let clientRes= {
         }
     ]
 }
+
 

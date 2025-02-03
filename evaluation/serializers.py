@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Company, Field,Option, ClientOption, ClientResponse,ClientSubmission
+from .models import Company, Field,Option, ClientOption,EvaluationRule,EvaluationOutcome, ClientResponse,ClientSubmission,EvaluationRuleCondition
 
 class CompanySerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
@@ -15,12 +15,44 @@ class CompanyStaffSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(write_only=True, min_length=8)
 
-
-
 class OptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Option
         fields = ['id', 'field', 'value', 'description']
+
+
+class FieldSerializer(serializers.ModelSerializer):
+    options = OptionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Field
+        fields = ['id', 'name', 'company','options']
+
+
+class EvaluationOutcomeSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = EvaluationOutcome
+        fields = ['company','name','description']
+
+
+
+
+class EvaluationRuleSerializer(serializers.ModelSerializer):
+    outcome = EvaluationOutcomeSerializer()
+
+    class Meta:
+        model = EvaluationRule
+        fields = ['id','company','outcome']
+
+
+class EvaluationRuleConditionSerialixer(serializers.ModelSerializer):
+    option = OptionSerializer(many=True)
+    rule = EvaluationRuleSerializer()
+    class Meta:
+        model = EvaluationRuleCondition
+        fields = [ 'rule', 'option']
+
 
 
 class ClientOptionSerializer(serializers.ModelSerializer):
@@ -33,7 +65,7 @@ class ClientResponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ClientResponse
-        fields = ['id', 'submission', 'client_options']
+        fields = ['id', 'client_options']
 
     def create(self, validated_data):
         client_options_data = validated_data.pop('client_options')
@@ -45,10 +77,7 @@ class ClientResponseSerializer(serializers.ModelSerializer):
         return response
 
 class ClientSubmissionSerializer(serializers.ModelSerializer):
-    responses = ClientResponseSerializer(many=True, required=False)
-
     class Meta:
         model = ClientSubmission
-        fields = ['id', 'client_name', 'client_email', 'client_phone', 'company', 'is_submitted', 'responses']
-
+        fields = ['id', 'client_name', 'client_email', 'client_phone', 'company', 'is_submitted', 'pdf_file']
 

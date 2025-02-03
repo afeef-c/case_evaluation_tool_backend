@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django.contrib.auth import authenticate, login
 from rest_framework_simplejwt.tokens import RefreshToken
 from .permissions import IsAgencyAdmin, IsCompanyAdmin
-from .serializers import CompanySerializer, CompanyStaffSerializer,ClientSubmissionSerializer
+from .serializers import CompanySerializer, CompanyStaffSerializer,ClientSubmissionSerializer,ClientResponseSerializer,FieldSerializer,EvaluationRuleConditionSerialixer
 from django.contrib.auth.models import User
 from .models import *
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -131,6 +131,7 @@ class CompanyStaffView(APIView):
             )
             
 
+
 class AddFieldsView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsCompanyAdmin]
@@ -158,12 +159,21 @@ class AddFieldsView(APIView):
             )
     
 
-
-
-class AddRulesView(APIView):
+class FieldListView(APIView):
     # authentication_classes = [JWTAuthentication]
     # permission_classes = [IsCompanyAdmin]
 
+    def get(self, request):
+        fields = Field.objects.all()
+        serializer = FieldSerializer(fields, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class AddRulesView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsCompanyAdmin]
+
+    
     def post(self, request):
         try:
             data = request.data
@@ -218,17 +228,83 @@ class AddRulesView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class ListRulesView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsCompanyAdmin]
+
+
+    def get(self, request):
+        rules = EvaluationRuleCondition.objects.all()
+        serializer = EvaluationRuleConditionSerialixer(rules, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+class UpdateRuleView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsCompanyAdmin]
+
+    def patch(self, request, rule_id):
+        try:
+            data = request.data
+
+            try:
+                rule = EvaluationRule.objects.get(id=rule_id)
+            except EvaluationRule.DoesNotExist:
+                return Response({"error": "Rule not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            options = []
+            for field_option in data.get('field_options', []):
+                option_name = field_option.get("option")
+                field = Field.objects.get(name=field_option.get("name"))
+
+                try:
+                    option = Option.objects.get(field=field, value=option_name)
+                    options.append(option)
+                except Option.DoesNotExist:
+                    return Response({"error": f"Option '{option_name}' not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            rule_condition = EvaluationRuleCondition.objects.filter(rule=rule).first()
+            if rule_condition:
+                rule_condition.option.set(options)
+                rule_condition.save()
+
+            return Response({'message': 'Rule updated successfully'}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DeleteRuleView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsCompanyAdmin]
+
+    def delete(self, request, rule_id):
+        try:
+            try:
+                rule = EvaluationRule.objects.get(id=rule_id)
+            except EvaluationRule.DoesNotExist:
+                return Response({"error": "Rule not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            rule.delete()
+            return Response({'message': 'Rule deleted successfully'}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 
 class ClientSubmissionAPIView(APIView):
 
-    def post(self, request):  # Step 1: Create submission and add responses
+    def post(self, request):  # Create submission with responses and options
         serializer = ClientSubmissionSerializer(data=request.data)
         if serializer.is_valid():
             submission = serializer.save()
             return Response(ClientSubmissionSerializer(submission).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def patch(self, request, pk):  # Step 2: Update option description
+    def patch(self, request, pk):  # Update option description
         try:
             submission = ClientSubmission.objects.get(pk=pk)
             option_id = request.data.get('option_id')
@@ -242,7 +318,7 @@ class ClientSubmissionAPIView(APIView):
         except (ClientSubmission.DoesNotExist, ClientOption.DoesNotExist):
             return Response({'error': 'Submission or Option not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    def put(self, request, pk):  # Step 3: Final submission and storing PDF
+    def put(self, request, pk):  # Final submission and storing PDF
         try:
             submission = ClientSubmission.objects.get(pk=pk)
             pdf_file = request.FILES.get('pdf_file')

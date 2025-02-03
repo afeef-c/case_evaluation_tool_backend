@@ -80,7 +80,7 @@ class EvaluationRuleCondition(models.Model):
 class ClientSubmission(models.Model):
     client_name = models.CharField(max_length=255)
     client_email = models.EmailField(null=True, blank=True)
-    client_phone = PhoneNumberField(null=True, blank=True)
+    client_phone = models.CharField(max_length=12, null=True, blank=True)
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='submissions')
     submitted_at = models.DateTimeField(auto_now_add=True)
     pdf_file = models.FileField(upload_to='submissions/', blank=True, null=True)
@@ -106,6 +106,7 @@ class ClientOption(models.Model):
 
     def __str__(self):
         return f"{self.option.value} (Custom: {self.custom_description})"
+
 
 
 

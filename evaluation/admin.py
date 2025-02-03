@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Company,CompanyStaff,Field,Option,EvaluationOutcome,EvaluationRule,EvaluationRuleCondition
+from .models import *
 # Register your models here.
 
 admin.site.register(Company)
@@ -9,3 +9,7 @@ admin.site.register(Option)
 admin.site.register(EvaluationOutcome)
 admin.site.register(EvaluationRule)
 admin.site.register(EvaluationRuleCondition)
+admin.site.register(ClientSubmission)
+admin.site.register(ClientResponse)
+admin.site.register(ClientOption)
+
