@@ -49,11 +49,11 @@ let rulesData = {
     field_options: [
         {
             name: "Physical Injury",
-            options: ["Significant/Severe", "Standard"]
+            option: "Significant/Severe"
         },
         {
             name: "Treatment",
-            options: ["Immediate and ongoing"]
+            option: "Immediate and ongoing"
         },
     ],
     case_evaluation: "Signed"
@@ -66,5 +66,24 @@ let templateData = {
     color: "#062135",
     footer_email: "test@gmial.com",
     footer_phone: "1234567890"
+}
+
+
+
+
+let clientRes= {
+    "client_name": "John Doe",
+    "client_mail":"john@gmail.com",
+    "client_phone":"7652432321",
+    "responses": [
+        {
+            "field_id": 1,
+            "option": "Significant/Severe"
+        },
+        {
+            "field_id": 2,
+            "option": "Immediate and ongoing"
+        }
+    ]
 }
 
