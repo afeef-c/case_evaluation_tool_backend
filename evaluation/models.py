@@ -1,5 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import User
+
+from django.core.exceptions import ValidationError
+
+
 # Create your models here.
 
 class Company(models.Model):
@@ -35,7 +39,7 @@ class Option(models.Model):
     description = models.TextField(null=True, blank=True)
 
     def __str__(self):
-        return self.value
+        return f"{self.field} - {self.value}"
 
 
 class EvaluationOutcome(models.Model):
@@ -58,8 +62,10 @@ class EvaluationRule(models.Model):
 # Conditions for each rule
 class EvaluationRuleCondition(models.Model):
     rule = models.ForeignKey(EvaluationRule, on_delete=models.CASCADE)
-    field = models.ForeignKey(Field, on_delete=models.CASCADE)
-    option = models.ManyToManyField(Option, related_name='rules')
+    option = models.ManyToManyField(Option, related_name='options')
+
 
     def __str__(self):
-        return f"{self.rule.outcome.name}: {self.field.name}"
+        options = ', '.join([option.value for option in self.option.all()])
+        return f"{self.rule.outcome.name}: {options}"
+
