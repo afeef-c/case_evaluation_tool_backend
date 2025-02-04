@@ -3,8 +3,12 @@ from .views import *
 urlpatterns = [
 
   
-    path('company/',CompanyView.as_view()),
-    path('company_staff/',CompanyStaffView.as_view()),
+    path('companies/', CompanyCreateAPIView.as_view(), name='create_company'),
+    path('companies/<int:company_id>/add-admin/', AddAdminAPIView.as_view(), name='add_admin'),
+    path('companies/<int:company_id>/remove-admin/<int:admin_id>/', RemoveAdminAPIView.as_view(), name='remove_admin'),
+
+
+    path('add_staff/', AddCompanyStaffAPIView.as_view(), name='add_company_staff'),
     path('login/',Login.as_view()),
     path('add_fields_and_options/',AddFieldsView.as_view()),
     path('fields/', FieldListView.as_view(), name='field_list'),

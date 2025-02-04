@@ -1,47 +1,76 @@
+// add company and admins (by Super admin)
+ let compData = {
+    "name": "company1",
+    
+    "admins": [
+      {
+        "username": "admin1",
+        "password": "adminpass1"
+      },
+      {
+        "username": "admin2",
+        "password": "adminpass2"
+      }
+    ]
+  }
+  
+// add admin to company
+let adminData={
+    "username": "new_admin",
+    "password": "newadminpass"
+  }
+  
+
+//add staff by company admin
+let staff_data={
+    "name": "Staff1",
+    "username": "staff1",
+    "password": "staff1"
+  }
+
+
 //by client(admin)
 //Add case evaluation form fields
 let fieldsData = {
-    userId: 1,
-    field_options: [
+    "field_options": [
         {
-            name: "Physical Injury",
-            options: [
+            "name": "Physical Injury",
+            "options": [
                 {
-                    name: "Significant/Severe",
-                    description: "testt tjtetheht h rerhehrerierherehrer"
+                    "name": "Significant/Severe",
+                    "description": "testt tjtetheht h rerhehrerierherehrer"
                 },
                 {
-                    name: "Standard",
-                    description: "testt tjtereretheht h fererre"
+                    "name": "Standard",
+                    "description": "testt tjtereretheht h fererre"
                 }
             ]
         },
         {
-            name: "Treatment",
-            options: [
+            "name": "Treatment",
+            "options": [
                 {
-                    name: "Immediate and ongoing",
-                    description: "fgdgd tjtetheht h gdggdgd"
+                    "name": "Immediate and ongoing",
+                    "description": "fgdgd tjtetheht h gdggdgd"
                 },
                 {
-                    name: "Immediate only, but willing to treat",
-                    description: "wewewew wewewe ewewh fererre"
+                    "name": "Immediate only, but willing to treat",
+                    "description": "wewewew wewewe ewewh fererre"
                 }
             ]
         }
     ],
-    case_evaluation_options: [
+    "case_evaluation_options": [
         {
-            name: "Signed",
-            description: "fgdgd tjtetheht h gdggdgd"
+            "name": "Signed",
+            "description": "fgdgd tjtetheht h gdggdgd"
         },
         {
-            name: "Declined",
-            description: "wewewew wewewe ewewh fererre"
+            "name": "Declined",
+            "description": "wewewew wewewe ewewh fererre"
         }
     ]
 }
-
 
 //Add case evaluation rules
 let rulesData = {
@@ -87,6 +116,18 @@ let clientRes= {
             "option": "Immediate and ongoing"
         }
     ]
+}  
+
+
+//respose after first submission
+
+{
+    "id": 1,
+    "client_name": "John Doe",
+    "client_email": "john@gmail.com",
+    "client_phone": "7652432321",
+    "is_submitted": false,
+    "pdf_file": null
 }
 
 

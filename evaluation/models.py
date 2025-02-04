@@ -8,14 +8,16 @@ from django.utils.translation import gettext_lazy as _
 
 # Create your models here.
 
+
+    
 class Company(models.Model):
     name = models.CharField(max_length=255, null=True, blank=True)
-    admin = models.OneToOneField(User, on_delete=models.CASCADE, related_name='company')
-    password = models.CharField(max_length=255, null=True, blank=True)
+    admins = models.ManyToManyField(User, related_name='companies')  
+    # password = models.CharField(max_length=255, null=True, blank=True)  
+    
 
     def __str__(self):
         return self.name
-    
 
 
 class CompanyStaff(models.Model):
@@ -97,6 +99,7 @@ class ClientResponse(models.Model):
 
     def __str__(self):
         return f"Response for {self.submission.client_name}"
+
 
 # Client Option Model
 class ClientOption(models.Model):

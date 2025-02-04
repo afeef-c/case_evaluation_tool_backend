@@ -1,19 +1,41 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Company, Field,Option, ClientOption,EvaluationRule,EvaluationOutcome, ClientResponse,ClientSubmission,EvaluationRuleCondition
-
-class CompanySerializer(serializers.Serializer):
-    username = serializers.CharField(max_length=150)
-    password = serializers.CharField(write_only=True, min_length=8)
-    
-    def validate_password(self, value):
-        # need to add password validation as per requirement
-        return value
+from .models import Company,CompanyStaff, Field,Option, ClientOption,EvaluationRule,EvaluationOutcome, ClientResponse,ClientSubmission,EvaluationRuleCondition
 
 
-class CompanyStaffSerializer(serializers.Serializer):
-    username = serializers.CharField(max_length=150)
-    password = serializers.CharField(write_only=True, min_length=8)
+class CompanyAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id','username', 'password']
+        extra_kwargs = {'password': {'write_only': True}}
+
+
+
+class CompanySerializer(serializers.ModelSerializer):
+    admins = CompanyAdminSerializer(many=True)  
+
+    class Meta:
+        model = Company
+        fields = ['id','name', 'admins']
+
+
+
+class CompanyStaffSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = CompanyStaff
+        fields = ['id', 'name', 'username', 'password']
+
+    def create(self, validated_data):
+        username = validated_data.pop('username')
+        password = validated_data.pop('password')
+
+        user = User.objects.create_user(username=username, password=password)
+        staff = CompanyStaff.objects.create(user=user, **validated_data)
+        return staff
+
 
 class OptionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -79,5 +101,5 @@ class ClientResponseSerializer(serializers.ModelSerializer):
 class ClientSubmissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClientSubmission
-        fields = ['id', 'client_name', 'client_email', 'client_phone', 'company', 'is_submitted', 'pdf_file']
+        fields = ['id', 'client_name', 'client_email', 'client_phone', 'is_submitted', 'pdf_file']
 
