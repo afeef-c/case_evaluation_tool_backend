@@ -170,8 +170,8 @@ class FieldListView(APIView):
 
 
 class AddRulesView(APIView):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsCompanyAdmin]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsCompanyAdmin]
 
     
     def post(self, request):
