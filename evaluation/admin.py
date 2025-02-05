@@ -10,6 +10,6 @@ admin.site.register(EvaluationOutcome)
 admin.site.register(EvaluationRule)
 admin.site.register(EvaluationRuleCondition)
 admin.site.register(ClientSubmission)
-admin.site.register(ClientResponse)
-admin.site.register(ClientOption)
+
+admin.site.register(ClientSubmissionOption)
 

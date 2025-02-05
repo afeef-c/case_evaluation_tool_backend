@@ -1,5 +1,9 @@
-from django.urls import path
+from django.urls import path,include
 from .views import *
+from rest_framework.routers import DefaultRouter
+
+
+
 urlpatterns = [
 
   
@@ -17,11 +21,12 @@ urlpatterns = [
     path('rules/',ListRulesView.as_view()),
     path('update_rule/<int:rule_id>/', UpdateRuleView.as_view(), name='update_rule'),
     path('delete_rule/<int:rule_id>/', DeleteRuleView.as_view(), name='delete_rule'),
+    path('get_evaluation/', EvaluateOutcomeView.as_view(), name='delete_rule'),
 
-    path('client_submissions/', ClientSubmissionAPIView.as_view(), name='client_submission_create'),
-    path('client_submissions/<int:pk>/', ClientSubmissionAPIView.as_view(), name='client_submission_detail'),
-    
-   
+    path('submissions/', ClientSubmissionView.as_view(), name='client-submission-create'),
     
     
+    path('company_details/', CompanyListAPIView.as_view(), name='comapany_details'),
+    
+
 ]

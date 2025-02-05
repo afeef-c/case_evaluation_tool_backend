@@ -72,6 +72,7 @@ let fieldsData = {
     ]
 }
 
+
 //Add case evaluation rules
 let rulesData = {
     userId : 1,
@@ -88,6 +89,10 @@ let rulesData = {
     case_evaluation: "Signed"
 }
 
+//  get_evaluation
+let optndata = {
+    "option_ids": [1, 3]
+  }
 
 //Add pdf Template Fields
 let templateData = {
@@ -103,20 +108,17 @@ let templateData = {
 
 let clientRes= {
     "client_name": "John Doe",
-    "client_email":"john@gmail.com",
-    "client_phone":"7652432321",
-    "company":2,
-    "responses": [
-        {
-            "field_id": 1,
-            "option": "Significant/Severe"
-        },
-        {
-            "field_id": 2,
-            "option": "Immediate and ongoing"
-        }
-    ]
-}  
+    "email": "john@example.com",
+    "phone": "+1234567890",
+    "generated_outcome":1,
+    "updated_out_description":"Checking updated_out_description!",
+    "selected_options": [1, 3],
+    "updated_description": {
+      "1": "Updated description for option 1",
+      "3": "Updated description for option 3"
+    }
+  }
+  
 
 
 //respose after first submission

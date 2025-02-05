@@ -4,12 +4,13 @@ from rest_framework.response import Response
 from django.contrib.auth import authenticate, login
 from rest_framework_simplejwt.tokens import RefreshToken
 from .permissions import IsAgencyAdmin, IsCompanyAdmin,IsCompanyAdminOrStaff
-from .serializers import CompanySerializer,CompanyAdminSerializer, CompanyStaffSerializer,ClientSubmissionSerializer,ClientResponseSerializer,FieldSerializer,EvaluationRuleConditionSerialixer
+from .serializers import CompanySerializer,CompanyAdminSerializer, CompanyStaffSerializer,FieldSerializer,EvaluationRuleConditionSerialixer
 from django.contrib.auth.models import User
 from .models import *
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework import status
 from django.shortcuts import get_object_or_404
+from rest_framework import generics, permissions
 
 
 # Create your views here.
@@ -190,15 +191,19 @@ class AddRulesView(APIView):
             data = request.data
 
             # Ensure required fields exist
-            required_fields = ['userId', 'field_options', 'case_evaluation']
+            required_fields = [ 'field_options', 'case_evaluation']
             if not all(field in data for field in required_fields):
                 return Response({"error": "Required fields are missing."}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Fetch company and evaluate outcomes
+            
+            user = request.user
+            
             try:
-                company = Company.objects.get(admin_id=data['userId'])
-            except Company.DoesNotExist:
-                return Response({"error": "Company not found."}, status=status.HTTP_404_NOT_FOUND)
+                # Check if the user is an admin of any company
+                company = Company.objects.filter(admins=user).first()
+                
+            except CompanyStaff.DoesNotExist:
+                return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
+
 
             try:
                 evaluation_outcome = EvaluationOutcome.objects.get(company=company, name=data['case_evaluation'])
@@ -305,72 +310,118 @@ class DeleteRuleView(APIView):
 
 
 
-
-class ClientSubmissionAPIView(APIView):
+class EvaluateOutcomeView(APIView):
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsCompanyAdminOrStaff]
 
-    def get_user_company(self, user):
-        """
-        Helper method to get the company associated with the user (admin or staff).
-        """
-        # Check if the user is a Company Admin
-        if user.companies.exists():  
-            return user.companies.first()  # Assuming the user is linked to at least one company
-
-        # Check if the user is Company Staff
-        elif hasattr(user, 'staff_profile'):  
-            return user.staff_profile.company
-
-        return None
-
-    def post(self, request):
-        user_company = self.get_user_company(request.user)
-        if not user_company:
-            return Response({'error': 'User is not associated with any company.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Attach the company to the submission automatically
-        serializer = ClientSubmissionSerializer(data=request.data)
-        if serializer.is_valid():
-            submission = serializer.save(company=user_company)  # Automatically link to user's company
-            return Response(ClientSubmissionSerializer(submission).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def patch(self, request, pk):
-        user_company = self.get_user_company(request.user)
-        if not user_company:
-            return Response({'error': 'User is not associated with any company.'}, status=status.HTTP_400_BAD_REQUEST)
-
+    def post(self, request, format=None):
+        
         try:
-            # Ensure the submission belongs to the user's company
-            submission = ClientSubmission.objects.get(pk=pk, company=user_company)
-            option_id = request.data.get('option_id')
-            new_description = request.data.get('custom_description')
-
-            client_option = ClientOption.objects.get(response__submission=submission, option_id=option_id)
-            client_option.custom_description = new_description
-            client_option.save()
-
-            return Response({'status': 'description updated'}, status=status.HTTP_200_OK)
-        except (ClientSubmission.DoesNotExist, ClientOption.DoesNotExist):
-            return Response({'error': 'Submission or Option not found'}, status=status.HTTP_404_NOT_FOUND)
-
-    def put(self, request, pk):
-        user_company = self.get_user_company(request.user)
-        if not user_company:
-            return Response({'error': 'User is not associated with any company.'}, status=status.HTTP_400_BAD_REQUEST)
-
+            user=request.user
+            # Check if the user is an admin of any company
+            company = Company.objects.filter(admins=user).first()
+            if not company:
+                # Check if the user is a staff of any company
+                staff_profile = CompanyStaff.objects.get(user=user)
+                company = staff_profile.company
+        except CompanyStaff.DoesNotExist:
+            return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
         try:
-            # Ensure the submission belongs to the user's company
-            submission = ClientSubmission.objects.get(pk=pk, company=user_company)
-            pdf_file = request.FILES.get('pdf_file')
+            
+            option_ids = request.data.get('option_ids', [])
 
-            if pdf_file:
-                submission.pdf_file.save(f"submission_{submission.id}.pdf", pdf_file)
 
-            submission.is_submitted = True
-            submission.save()
+            if not option_ids:
+                return Response({"error": "No options provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-            return Response({'status': 'submitted', 'pdf_url': submission.pdf_file.url}, status=status.HTTP_200_OK)
-        except ClientSubmission.DoesNotExist:
-            return Response({'error': 'Submission not found'}, status=status.HTTP_404_NOT_FOUND)
 
+            # Retrieve all evaluation rules for the given company
+            evaluation_rules = EvaluationRule.objects.filter(company=company)
+
+            for rule in evaluation_rules:
+                # Get all option IDs associated with the rule's conditions
+                rule_option_ids = set(
+                    EvaluationRuleCondition.objects.filter(rule=rule)
+                    .values_list('option__id', flat=True)
+                )
+
+                # Check if the rule's options are a subset of the provided options
+                if rule_option_ids.issubset(set(option_ids)):
+                    outcome = rule.outcome
+                    return Response(
+                        {
+                            "outcome_id": outcome.id,
+                            "outcome_name": outcome.name,
+                            "outcome_description": outcome.description,
+                        },
+                        status=status.HTTP_200_OK
+                    )
+
+            # If no rule matches, return a default response
+            return Response({"message": "No matching evaluation outcome found."}, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+class ClientSubmissionView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsCompanyAdminOrStaff]
+
+
+    def post(self, request, format=None):
+        data = request.data
+        
+        try:
+            user = request.user
+            submitted_by = user
+
+            try:
+                # Check if the user is an admin of any company
+                company = Company.objects.filter(admins=user).first()
+                if not company:
+                    # Check if the user is a staff of any company
+                    staff_profile = CompanyStaff.objects.get(user=user)
+                    company = staff_profile.company
+            except CompanyStaff.DoesNotExist:
+                return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            evaluation_outcome = EvaluationOutcome.objects.get(id=data['generated_outcome'])
+            # Create the client submission
+            submission = ClientSubmission.objects.create(
+                client_name=data['client_name'],
+                client_email=data['email'],
+                client_phone=data['phone'],
+                generated_outcome=evaluation_outcome,
+                updated_out_description=data['updated_out_description'],
+                company=company,
+                submitted_by=submitted_by,
+
+            )
+
+            # Add selected options to the submission
+            selected_options = data['selected_options']  # List of option IDs
+            for option_id in selected_options:
+                option = Option.objects.get(id=option_id)
+                updated_description = data.get('updated_description', {}).get(str(option_id), "")
+                ClientSubmissionOption.objects.create(
+                    submission=submission,
+                    option=option,
+                    updated_description=updated_description
+                )
+
+            return Response({"message": "Client submission created successfully", "submission_id": submission.id}, status=status.HTTP_201_CREATED)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CompanyListAPIView(APIView):
+
+    def get(self, request):
+        companies = Company.objects.all()
+        serializer = CompanySerializer(companies, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
