@@ -12,13 +12,13 @@ from django.utils.translation import gettext_lazy as _
 
     
 class Company(models.Model):
+    company_name = models.CharField(max_length=255, null=True, blank=True)
     name = models.CharField(max_length=255, null=True, blank=True)
-    admins = models.ManyToManyField(User, related_name='companies')  
-    # password = models.CharField(max_length=255, null=True, blank=True)  
+    admin = models.OneToOneField(User,on_delete=models.CASCADE, related_name='company', default=1)  
     
 
     def __str__(self):
-        return self.name
+        return self.company_name
 
 
 class CompanyStaff(models.Model):

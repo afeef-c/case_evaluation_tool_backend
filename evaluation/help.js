@@ -1,25 +1,13 @@
 // add company and admins (by Super admin)
  let compData = {
-    "name": "company1",
-    
-    "admins": [
-      {
-        "username": "admin1",
-        "password": "adminpass1"
-      },
-      {
-        "username": "admin2",
-        "password": "adminpass2"
-      }
-    ]
+    "company_name": "company1",
+    "name":"admin1",
+    "username": "admin1",
+    "password": "adminpass1"
+      
   }
   
-// add admin to company
-let adminData={
-    "username": "new_admin",
-    "password": "newadminpass"
-  }
-  
+
 
 //add staff by company admin
 let staff_data={
@@ -75,18 +63,18 @@ let fieldsData = {
 
 //Add case evaluation rules
 let rulesData = {
-    userId : 1,
-    field_options: [
+    
+    "field_options": [
         {
-            name: "Physical Injury",
-            option: "Significant/Severe"
+            "name": "Physical Injury",
+            "option": "Significant/Severe"
         },
         {
-            name: "Treatment",
-            option: "Immediate and ongoing"
-        },
+            "name": "Treatment",
+            "option": "Immediate and ongoing"
+        }
     ],
-    case_evaluation: "Signed"
+    "case_evaluation": "Signed"
 }
 
 //  get_evaluation

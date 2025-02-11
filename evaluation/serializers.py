@@ -6,33 +6,53 @@ from .models import Company,CompanyStaff, Field,Option,EvaluationRule,Evaluation
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username','password']
+        fields = ['id','username','password']
 
 class CompanyStaffSerializer_(serializers.ModelSerializer):
     user = UserSerializer()
-
     class Meta:
         model = CompanyStaff
-        fields = ['id', 'name', 'user', 'password']
-
-class CompanySerializer(serializers.ModelSerializer):
-    admins = UserSerializer(many=True)
-    staff = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Company
-        fields = ['id', 'name', 'admins', 'staff']
-
-    def get_staff(self, obj):
-        staffs = CompanyStaff.objects.filter(company=obj)
-        return CompanyStaffSerializer_(staffs, many=True).data
-
+        fields = ['id', 'user']
 
 class CompanyAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id','username', 'password']
         extra_kwargs = {'password': {'write_only': True}}
+
+
+class CompanySerializer(serializers.ModelSerializer):
+    name = serializers.CharField(write_only=True, required=False, allow_blank=True)  # Admin's name (used for user creation)
+    username = serializers.CharField(write_only=True)  # Admin's username
+    password = serializers.CharField(write_only=True)  # Admin's password
+    admin = serializers.SerializerMethodField()  # Read-only field for response
+
+    class Meta:
+        model = Company
+        fields = ['id', 'company_name', 'name', 'username', 'password', 'admin']
+
+    def get_admin(self, obj):
+        """Return admin user details"""
+        if obj.admin:
+            return {
+                "id": obj.admin.id,
+                "username": obj.admin.username,
+            }
+        return None
+
+
+class CompanyDataSerializer(serializers.ModelSerializer):
+    admin = CompanyAdminSerializer()
+    staff = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Company
+        fields = ['id', 'company_name','name', 'admin', 'staff']
+
+    def get_staff(self, obj):
+        staffs = CompanyStaff.objects.filter(company=obj)
+        return CompanyStaffSerializer_(staffs, many=True).data
+
 
 
 
@@ -46,9 +66,10 @@ class CompanyAdminSerializer(serializers.ModelSerializer):
 
 
 
+
 class CompanyStaffSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True)
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
 
     class Meta:
         model = CompanyStaff
@@ -58,8 +79,27 @@ class CompanyStaffSerializer(serializers.ModelSerializer):
         username = validated_data.pop('username')
         password = validated_data.pop('password')
 
-        user = User.objects.create_user(username=username, password=password)
-        staff = CompanyStaff.objects.create(user=user, **validated_data)
+        # Check if the user exists
+        user, created = User.objects.get_or_create(username=username)
+
+        if not created:
+            # If user exists, update the password
+            user.set_password(password)
+            user.save()
+        else:
+            # If new user, set password properly
+            user.set_password(password)
+            user.save()
+
+        # Ensure CompanyStaff entry exists
+        staff, staff_created = CompanyStaff.objects.get_or_create(user=user, defaults=validated_data)
+
+        if not staff_created:
+            # If staff already exists, update fields
+            for key, value in validated_data.items():
+                setattr(staff, key, value)
+            staff.save()
+
         return staff
 
 

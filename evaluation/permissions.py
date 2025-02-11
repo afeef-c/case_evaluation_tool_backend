@@ -9,15 +9,23 @@ class IsCompanyAdmin(BasePermission):
         return request.user.is_authenticated and request.user.is_staff
 
 class IsCompanyAdminOrStaff(BasePermission):
+    """
+    Custom permission to allow access only to Company Admins or Staff.
+    """
 
     def has_permission(self, request, view):
         user = request.user
-        # Check if the user is authenticated
-        if user.companies.exists():  # Related name in ManyToManyField (Company.admins)
+
+        # Ensure the user is authenticated
+        if not user or not user.is_authenticated:
+            return False
+
+        # Check if the user is a Company Admin (i.e., linked as an admin in the Company model)
+        if hasattr(user, 'company') and user.company.admin == user:
             return True
 
         # Check if the user is a Company Staff
         if hasattr(user, 'staff_profile'):
             return True
-        # Allow if the user is a company admin or staff
+
         return False

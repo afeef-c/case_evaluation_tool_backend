@@ -4,13 +4,13 @@ from rest_framework.response import Response
 from django.contrib.auth import authenticate, login
 from rest_framework_simplejwt.tokens import RefreshToken
 from .permissions import IsAgencyAdmin, IsCompanyAdmin,IsCompanyAdminOrStaff
-from .serializers import CompanySerializer,CompanyAdminSerializer, CompanyStaffSerializer,FieldSerializer,EvaluationRuleConditionSerialixer
+from .serializers import CompanySerializer,CompanyDataSerializer, CompanyStaffSerializer,FieldSerializer,EvaluationRuleConditionSerialixer
 from django.contrib.auth.models import User
 from .models import *
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-
+from django.db import IntegrityError, transaction
 
 
 # Create your views here.
@@ -60,79 +60,86 @@ class Login(APIView):
                             },status=400)
         
 
+
 # add Company and Admin by superAdmin
-class CompanyCreateAPIView(APIView):
+class CompanyCreateOrUpdateAPIView(APIView):
     permission_classes = [IsAgencyAdmin]
 
+    @transaction.atomic
     def post(self, request):
         serializer = CompanySerializer(data=request.data)
 
-        if serializer.is_valid():
-            company_data = serializer.validated_data
-            admins_data = company_data.pop('admins')
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            # Create Company
-            company = Company.objects.create(**company_data)
+        company_data = serializer.validated_data
 
-            # Create Admins with is_staff=True
-            for admin_data in admins_data:
-                admin_serializer = CompanyAdminSerializer(data=admin_data)
-                if admin_serializer.is_valid():
-                    admin_validated_data = admin_serializer.validated_data
-                    
-                    # Ensure is_staff is set to True
-                    admin = User.objects.create_user(**admin_validated_data, is_staff=True)
-                    
-                    # Add admin to the company
-                    company.admins.add(admin)
-                else:
-                    return Response(admin_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            # Ensure user exists or create one
+            user, user_created = User.objects.get_or_create(username=company_data['username'])
 
-            return Response(CompanySerializer(company).data, status=status.HTTP_201_CREATED)
+            if not user_created:
+                # If user exists, update only necessary fields
+                user.set_password(company_data['password'])
+                user.is_staff = True
+                user.save()
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            # Check if the user is already assigned to another company
+            existing_company = Company.objects.filter(admin=user).exclude(company_name=company_data['company_name']).first()
+            if existing_company:
+                return Response(
+                    {"error": "This admin is already assigned to another company."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Ensure company exists or create it
+            company, created = Company.objects.get_or_create(
+                company_name=company_data['company_name'],
+                defaults={"admin": user}
+            )
+
+            # Update company admin if necessary
+            if company.admin != user:
+                company.admin = user
+                company.save()
+
+            return Response(CompanySerializer(company).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+        except IntegrityError:
+            return Response(
+                {"error": "Database error: Possible duplicate entry."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
-# add Admin for existing  Company
-class AddAdminAPIView(APIView):
+
+class DeleteCompanyAPIView(APIView):
     permission_classes = [IsAgencyAdmin]
     
-    def post(self, request, company_id):
-        company = get_object_or_404(Company, id=company_id)
-        admin_serializer = CompanyAdminSerializer(data=request.data)
+    def delete(self, request, company_id):
+
+        try:
+            try:
+                company = Company.objects.get(id=company_id)
+            except Company.DoesNotExist:
+                return Response({"error": "Company not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            company.delete()
+            return Response({'message': 'Company deleted successfully'}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        if admin_serializer.is_valid():
-            admin = User.objects.create_user(**admin_serializer.validated_data)
-            company.admins.add(admin)
-            return Response({"message": "Admin added successfully"}, status=status.HTTP_201_CREATED)
-
-        return Response(admin_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-# Remove Admin from a Company
-class RemoveAdminAPIView(APIView):
-    permission_classes = [IsAgencyAdmin]
-    
-    def delete(self, request, company_id, admin_id):
-        company = get_object_or_404(Company, id=company_id)
-        admin = get_object_or_404(User, id=admin_id)
-
-        if admin in company.admins.all():
-            company.admins.remove(admin)
-            admin.delete()  # Optional: Delete the user entirely or just remove the relation
-            return Response({"message": "Admin removed successfully"}, status=status.HTTP_200_OK)
-        else:
-            return Response({"error": "Admin not associated with this company"}, status=status.HTTP_400_BAD_REQUEST)
 
 
-
-
+# add or update
 class AddCompanyStaffAPIView(APIView):
     permission_classes = [IsCompanyAdmin]
 
     def post(self, request):
         try:
             # Automatically get the company associated with the logged-in admin
-            company = Company.objects.get(admins=request.user)
+            company = Company.objects.get(admin=request.user)
         except Company.DoesNotExist:
             return Response({"error": "You are not authorized to add staff."}, status=status.HTTP_403_FORBIDDEN)
 
@@ -143,40 +150,106 @@ class AddCompanyStaffAPIView(APIView):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+# delete staff
+class DeleteStaffAPIView(APIView):
+    permission_classes = [IsCompanyAdmin]
+    
+    def delete(self, request, staff_id):
+
+        try:
+            try:
+                staff = CompanyStaff.objects.get(id=staff_id)
+            except CompanyStaff.DoesNotExist:
+                return Response({"error": "Staff not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            staff.delete()
+            return Response({'message': 'Staff deleted successfully'}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+
+class ListCompanyAPIView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsCompanyAdminOrStaff | IsAgencyAdmin]
+
+    def get(self, request):
+        user = self.request.user
+        if user.is_superuser:
+            companies = Company.objects.all()
+            serializer = CompanyDataSerializer(companies, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        else:
+            # If user is a Company Admin or Staff, fetch rules only for their company
+            if hasattr(user, "company"):
+                company = user.company
+            elif hasattr(user, "staff_profile"):
+                company = user.staff_profile.company
+            else:
+                return Response({"error": "User is not associated with any company."}, status=status.HTTP_403_FORBIDDEN)
+
+            serializer = CompanyDataSerializer(company)  
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
 
 class AddFieldsView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsCompanyAdmin]
+
     def post(self, request):
         try:
             data = request.data
+            company = Company.objects.get(admin=request.user)
 
-            # company = Company.objects.get(admin_id=data.get('userId'))
-            company = Company.objects.get(admins=request.user)
-            
+            # Delete all existing fields and evaluation outcomes for the company
+            Field.objects.filter(company=company).delete()
+            EvaluationOutcome.objects.filter(company=company).delete()
 
+            # Add new fields and options
             for field_data in data.get('field_options', []):
                 field = Field.objects.create(company=company, name=field_data['name'])
                 for option_data in field_data.get('options', []):
                     Option.objects.create(field=field, value=option_data['name'], description=option_data['description'])
 
+            # Add new evaluation outcomes
             for eval_option in data.get('case_evaluation_options', []):
                 EvaluationOutcome.objects.create(company=company, name=eval_option['name'], description=eval_option['description'])
 
             return Response({"message": "Fields and options added successfully."}, status=201)
+
+        except Company.DoesNotExist:
+            return Response({"error": "Company not found."}, status=404)
         except Exception as e:
-             return Response(
-                {"error": str(e)},
-                status=500
-            )
-    
+            return Response({"error": str(e)}, status=500)
+
+
 
 class FieldListView(APIView):
-    # authentication_classes = [JWTAuthentication]
-    # permission_classes = [IsCompanyAdmin]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsCompanyAdminOrStaff | IsAgencyAdmin]
 
     def get(self, request):
-        fields = Field.objects.all()
+        user = self.request.user
+
+        if user.is_superuser:
+            fields = Field.objects.all()
+        
+        else:  
+            # If user is a Company Admin or Staff, fetch rules only for their company
+            if hasattr(user, "company"):
+                company = user.company
+            elif hasattr(user, "staff_profile"):
+                company = user.staff_profile.company
+            else:
+                return Response({"error": "User is not associated with any company."}, status=status.HTTP_403_FORBIDDEN)
+
+            # rules = EvaluationRuleCondition.objects.filter(company=company)
+            fields = Field.objects.filter(company=company)
+
         serializer = FieldSerializer(fields, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -199,7 +272,7 @@ class AddRulesView(APIView):
             
             try:
                 # Check if the user is an admin of any company
-                company = Company.objects.filter(admins=user).first()
+                company = Company.objects.filter(admin=user).first()
                 
             except CompanyStaff.DoesNotExist:
                 return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -245,14 +318,31 @@ class AddRulesView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ListRulesView(APIView):
-    # authentication_classes = [JWTAuthentication]
-    # permission_classes = [IsCompanyAdmin]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsCompanyAdminOrStaff | IsAgencyAdmin]
 
 
     def get(self, request):
-        rules = EvaluationRuleCondition.objects.all()
+        user = self.request.user
+
+        if user.is_superuser:  
+            rules = EvaluationRuleCondition.objects.all()
+        else:  
+            # If user is a Company Admin or Staff, fetch rules only for their company
+            if hasattr(user, "company"):
+                company = user.company
+            elif hasattr(user, "staff_profile"):
+                company = user.staff_profile.company
+            else:
+                return Response({"error": "User is not associated with any company."}, status=status.HTTP_403_FORBIDDEN)
+
+            # rules = EvaluationRuleCondition.objects.filter(company=company)
+            rules = EvaluationRuleCondition.objects.filter(rule__company=company)
+
+
         serializer = EvaluationRuleConditionSerialixer(rules, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 
 
@@ -319,7 +409,7 @@ class EvaluateOutcomeView(APIView):
         try:
             user=request.user
             # Check if the user is an admin of any company
-            company = Company.objects.filter(admins=user).first()
+            company = Company.objects.filter(admin=user).first()
             if not company:
                 # Check if the user is a staff of any company
                 staff_profile = CompanyStaff.objects.get(user=user)
@@ -381,7 +471,7 @@ class ClientSubmissionView(APIView):
 
             try:
                 # Check if the user is an admin of any company
-                company = Company.objects.filter(admins=user).first()
+                company = Company.objects.filter(admin=user).first()
                 if not company:
                     # Check if the user is a staff of any company
                     staff_profile = CompanyStaff.objects.get(user=user)
@@ -419,9 +509,9 @@ class ClientSubmissionView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class CompanyListAPIView(APIView):
+# class CompanyListAPIView(APIView):
 
-    def get(self, request):
-        companies = Company.objects.all()
-        serializer = CompanySerializer(companies, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+#     def get(self, request):
+#         companies = Company.objects.all()
+#         serializer = CompanySerializer(companies, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)

@@ -10,25 +10,26 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
-    path('companies/', CompanyCreateAPIView.as_view(), name='create_company'),
-    path('companies/<int:company_id>/add-admin/', AddAdminAPIView.as_view(), name='add_admin'),
-    path('companies/<int:company_id>/remove-admin/<int:admin_id>/', RemoveAdminAPIView.as_view(), name='remove_admin'),
+    path('upsert_company/', CompanyCreateOrUpdateAPIView.as_view(), name='add_company'),
+    path('delete_company/<int:company_id>/', DeleteCompanyAPIView.as_view(), name='delete_company'),
 
-
-    path('add_staff/', AddCompanyStaffAPIView.as_view(), name='add_company_staff'),
-    path('add_fields_and_options/',AddFieldsView.as_view()),
-    path('fields/', FieldListView.as_view(), name='field_list'),
+    path('upsert_staff/', AddCompanyStaffAPIView.as_view(), name='add_company_staff'),
+    path('delete_staff/<int:staff_id>/', DeleteStaffAPIView.as_view(), name='delete_staff'),
+    path('get_company_details/', ListCompanyAPIView.as_view(), name='get_company_details'),
+    
+    path('upsert_fields_and_options/',AddFieldsView.as_view()),
+    path('get_fields/', FieldListView.as_view(), name='field_list'),
 
     path('add_rule/',AddRulesView.as_view()),
-    path('rules/',ListRulesView.as_view()),
+    path('get_rules/',ListRulesView.as_view()),
     path('update_rule/<int:rule_id>/', UpdateRuleView.as_view(), name='update_rule'),
+    
     path('delete_rule/<int:rule_id>/', DeleteRuleView.as_view(), name='delete_rule'),
     path('get_evaluation/', EvaluateOutcomeView.as_view(), name='get_evaluation'),
 
     path('submissions/', ClientSubmissionView.as_view(), name='client-submission-create'),
     
     
-    path('company_details/', CompanyListAPIView.as_view(), name='comapany_details'),
     
 
 ]
