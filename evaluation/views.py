@@ -1,4 +1,4 @@
-from django.shortcuts import render
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.contrib.auth import authenticate, login
@@ -10,7 +10,7 @@ from .models import *
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from rest_framework import generics, permissions
+
 
 
 # Create your views here.
