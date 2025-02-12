@@ -169,7 +169,7 @@ class DeleteStaffAPIView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
-
+# List company details admin and staffs
 class ListCompanyAPIView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsCompanyAdminOrStaff | IsAgencyAdmin]
@@ -182,7 +182,7 @@ class ListCompanyAPIView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         else:
-            # If user is a Company Admin or Staff, fetch rules only for their company
+            # If user is a Company Admin or Staff, fetch details for their company
             if hasattr(user, "company"):
                 company = user.company
             elif hasattr(user, "staff_profile"):
@@ -195,7 +195,7 @@ class ListCompanyAPIView(APIView):
 
 
 
-
+# add/update feilds options and evaluation outcomes
 class AddFieldsView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsCompanyAdmin]
@@ -227,19 +227,19 @@ class AddFieldsView(APIView):
             return Response({"error": str(e)}, status=500)
 
 
-
+# Get all feilds,options and evalaution outcomes
 class FieldListView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsCompanyAdminOrStaff | IsAgencyAdmin]
 
     def get(self, request):
         user = self.request.user
-
+        # if agency admin get all feilds 
         if user.is_superuser:
             fields = Field.objects.all()
         
         else:  
-            # If user is a Company Admin or Staff, fetch rules only for their company
+            # If user is a Company Admin or Staff, fetch feilds only for their company
             if hasattr(user, "company"):
                 company = user.company
             elif hasattr(user, "staff_profile"):
@@ -316,6 +316,7 @@ class AddRulesView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class ListRulesView(APIView):
     authentication_classes = [JWTAuthentication]
