@@ -1,18 +1,20 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Company,CompanyStaff, Field,Option,EvaluationRule,EvaluationOutcome,EvaluationRuleCondition
+from .models import Company,CompanyStaff, Field,Option,EvaluationRule,EvaluationOutcome,EvaluationRuleCondition,ClientSubmission,ClientSubmissionOption
 
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id','username','password']
+        fields = ['username','password']
 
 class CompanyStaffSerializer_(serializers.ModelSerializer):
-    user = UserSerializer()
+    username = serializers.CharField(source="user.username")  # Get username from related user model
+    password = serializers.CharField(write_only=True, required=False, style={'input_type': 'password'})
+
     class Meta:
         model = CompanyStaff
-        fields = ['id', 'user']
+        fields = ['id','name', 'username', 'password']
 
 class CompanyAdminSerializer(serializers.ModelSerializer):
     class Meta:
@@ -44,7 +46,7 @@ class CompanySerializer(serializers.ModelSerializer):
 class CompanyDataSerializer(serializers.ModelSerializer):
     admin = CompanyAdminSerializer()
     staff = serializers.SerializerMethodField()
-
+    
     class Meta:
         model = Company
         fields = ['id', 'company_name','name', 'admin', 'staff']
@@ -56,51 +58,16 @@ class CompanyDataSerializer(serializers.ModelSerializer):
 
 
 
-# class CompanySerializer(serializers.ModelSerializer):
-#     admins = CompanyAdminSerializer(many=True)  
-#     staffs = CompanyAdminSerializer(many=True)
-#     class Meta:
-#         model = Company
-#         fields = ['id','name', 'admins', 'staffs']
-
-
-
 
 
 class CompanyStaffSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True)
     password = serializers.CharField(write_only=True, style={'input_type': 'password'})
-
+    
     class Meta:
         model = CompanyStaff
         fields = ['id', 'name', 'username', 'password']
 
-    def create(self, validated_data):
-        username = validated_data.pop('username')
-        password = validated_data.pop('password')
-
-        # Check if the user exists
-        user, created = User.objects.get_or_create(username=username)
-
-        if not created:
-            # If user exists, update the password
-            user.set_password(password)
-            user.save()
-        else:
-            # If new user, set password properly
-            user.set_password(password)
-            user.save()
-
-        # Ensure CompanyStaff entry exists
-        staff, staff_created = CompanyStaff.objects.get_or_create(user=user, defaults=validated_data)
-
-        if not staff_created:
-            # If staff already exists, update fields
-            for key, value in validated_data.items():
-                setattr(staff, key, value)
-            staff.save()
-
-        return staff
 
 
 class OptionSerializer(serializers.ModelSerializer):
@@ -134,13 +101,33 @@ class EvaluationRuleSerializer(serializers.ModelSerializer):
         fields = ['id','company','outcome']
 
 
-class EvaluationRuleConditionSerialixer(serializers.ModelSerializer):
+class EvaluationRuleConditionSerializer(serializers.ModelSerializer):
     option = OptionSerializer(many=True)
     rule = EvaluationRuleSerializer()
     class Meta:
         model = EvaluationRuleCondition
         fields = [ 'rule', 'option']
 
+class ClientSubmissionOptionSerializer(serializers.ModelSerializer):
+    option = OptionSerializer(read_only=True)  # Fetch option details
+    option_id = serializers.PrimaryKeyRelatedField(
+        queryset=Option.objects.all(), source='option', write_only=True
+    )
+
+    class Meta:
+        model = ClientSubmissionOption
+        fields = ['id', 'submission', 'option', 'option_id', 'updated_description']
 
 
+class ClientSubmissionSerializer(serializers.ModelSerializer):
+    selected_options = ClientSubmissionOptionSerializer(many=True, source='submission_options', read_only=True)
+    generated_outcome = serializers.PrimaryKeyRelatedField(queryset=EvaluationOutcome.objects.all())
+
+    class Meta:
+        model = ClientSubmission
+        fields = [
+            'id', 'client_name', 'client_email', 'client_phone',
+            'generated_outcome', 'updated_out_description', 'company',
+            'submitted_by', 'selected_options'
+        ]
 

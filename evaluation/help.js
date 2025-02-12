@@ -79,7 +79,7 @@ let rulesData = {
 
 //  get_evaluation
 let optndata = {
-    "option_ids": [1, 3]
+    "option_ids": [17, 19]
   }
 
 //Add pdf Template Fields

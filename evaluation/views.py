@@ -4,13 +4,14 @@ from rest_framework.response import Response
 from django.contrib.auth import authenticate, login
 from rest_framework_simplejwt.tokens import RefreshToken
 from .permissions import IsAgencyAdmin, IsCompanyAdmin,IsCompanyAdminOrStaff
-from .serializers import CompanySerializer,CompanyDataSerializer, CompanyStaffSerializer,FieldSerializer,EvaluationRuleConditionSerialixer
+from .serializers import *
 from django.contrib.auth.models import User
 from .models import *
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
 
 
 # Create your views here.
@@ -60,9 +61,8 @@ class Login(APIView):
                             },status=400)
         
 
-
-# add Company and Admin by superAdmin
-class CompanyCreateOrUpdateAPIView(APIView):
+# add company
+class CompanyCreateAPIView(APIView):
     permission_classes = [IsAgencyAdmin]
 
     @transaction.atomic
@@ -76,34 +76,70 @@ class CompanyCreateOrUpdateAPIView(APIView):
 
         try:
             # Ensure user exists or create one
-            user, user_created = User.objects.get_or_create(username=company_data['username'])
+            user, created = User.objects.get_or_create(username=company_data['username'])
 
-            if not user_created:
-                # If user exists, update only necessary fields
+            if created:
                 user.set_password(company_data['password'])
                 user.is_staff = True
                 user.save()
 
             # Check if the user is already assigned to another company
-            existing_company = Company.objects.filter(admin=user).exclude(company_name=company_data['company_name']).first()
-            if existing_company:
+            if Company.objects.filter(admin=user).exists():
                 return Response(
                     {"error": "This admin is already assigned to another company."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Ensure company exists or create it
-            company, created = Company.objects.get_or_create(
+            # Create a new company
+            company = Company.objects.create(
                 company_name=company_data['company_name'],
-                defaults={"admin": user}
+                admin=user
             )
 
-            # Update company admin if necessary
-            if company.admin != user:
-                company.admin = user
-                company.save()
+            return Response(CompanySerializer(company).data, status=status.HTTP_201_CREATED)
 
-            return Response(CompanySerializer(company).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        except IntegrityError:
+            return Response(
+                {"error": "Database error: Possible duplicate entry."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+# update company
+class CompanyUpdateAPIView(APIView):
+    permission_classes = [IsAgencyAdmin]
+
+    @transaction.atomic
+    def patch(self, request):
+        try:
+            company = Company.objects.get(id=request.data.get("id"))
+        except Company.DoesNotExist:
+            return Response({"error": "Company not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = CompanySerializer(company, data=request.data, partial=True)
+
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        company_data = serializer.validated_data
+
+        try:
+            # Update company fields
+            company.company_name = company_data.get("company_name", company.company_name)
+
+            if "name" in company_data:
+                company.name = company_data["name"]
+
+            # Update user details
+            user = company.admin
+            user.username = company_data.get("username", user.username)
+
+            if "password" in company_data:
+                user.set_password(company_data["password"])
+
+            user.save()
+            company.save()
+
+            return Response(CompanySerializer(company).data, status=status.HTTP_200_OK)
 
         except IntegrityError:
             return Response(
@@ -112,7 +148,7 @@ class CompanyCreateOrUpdateAPIView(APIView):
             )
 
 
-
+# delete comapany
 class DeleteCompanyAPIView(APIView):
     permission_classes = [IsAgencyAdmin]
     
@@ -132,23 +168,116 @@ class DeleteCompanyAPIView(APIView):
         
 
 
-# add or update
+# add companystaff
 class AddCompanyStaffAPIView(APIView):
     permission_classes = [IsCompanyAdmin]
 
+    @transaction.atomic
     def post(self, request):
         try:
-            # Automatically get the company associated with the logged-in admin
+            # Get the company associated with the logged-in admin
             company = Company.objects.get(admin=request.user)
         except Company.DoesNotExist:
             return Response({"error": "You are not authorized to add staff."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = CompanyStaffSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(company=company)
-            return Response({"message": "Staff added successfully!", "staff": serializer.data}, status=status.HTTP_201_CREATED)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        company_staff_data = serializer.validated_data
+        username = company_staff_data.get('username')
+        password = company_staff_data.get('password')
+        name = company_staff_data.get('name')
+
+        if not username or not password:
+            return Response({"error": "Username and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Ensure user exists or create a new one
+            user, created = User.objects.get_or_create(username=username)
+
+            if created:
+                user.set_password(password)
+                user.save()
+
+            # Prevent assigning the same user to multiple companies
+            if CompanyStaff.objects.filter(user=user).exists():
+                return Response(
+                    {"error": "This staff is already assigned to another company."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Create the staff entry
+            company_staff = CompanyStaff.objects.create(
+                name=name,
+                user=user,
+                company=company
+            )
+
+            return Response(
+                {"message": "Staff added successfully!", "staff": CompanyStaffSerializer(company_staff).data},
+                status=status.HTTP_201_CREATED
+            )
+
+        except IntegrityError:
+            return Response(
+                {"error": "Database error: Possible duplicate entry."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+# update company staff
+class UpdateCompanyStaffAPIView(APIView):
+    permission_classes = [IsCompanyAdmin]
+
+    @transaction.atomic
+    def patch(self, request):
+        try:
+            # Get the company associated with the logged-in admin
+            company = Company.objects.get(admin=request.user)
+        except Company.DoesNotExist:
+            return Response({"error": "You are not authorized to update staff."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Get staff_id from request data
+        staff_id = request.data.get("staff_id")
+        if not staff_id:
+            return Response({"error": "Staff ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Fetch the staff member, ensuring they belong to the admin's company
+        try:
+            staff = CompanyStaff.objects.get(id=staff_id, company=company)
+        except CompanyStaff.DoesNotExist:
+            return Response({"error": "Staff member not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Validate and update using serializer
+        serializer = CompanyStaffSerializer(staff, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        staff_data = serializer.validated_data
+
+        try:
+            # Update staff details
+            staff.name = staff_data.get("name", staff.name)
+
+            # Update user details
+            user = staff.user
+            user.username = staff_data.get("username", user.username)
+
+            if "password" in staff_data:
+                user.set_password(staff_data["password"])
+
+            user.save()
+            staff.save()
+
+            return Response(CompanyStaffSerializer(staff).data, status=status.HTTP_200_OK)
+
+        except IntegrityError:
+            return Response(
+                {"error": "Database error: Possible duplicate entry."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 
 # delete staff
 class DeleteStaffAPIView(APIView):
@@ -168,6 +297,7 @@ class DeleteStaffAPIView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+
 
 # List company details admin and staffs
 class ListCompanyAPIView(APIView):
@@ -341,7 +471,7 @@ class ListRulesView(APIView):
             rules = EvaluationRuleCondition.objects.filter(rule__company=company)
 
 
-        serializer = EvaluationRuleConditionSerialixer(rules, many=True)
+        serializer = EvaluationRuleConditionSerializer(rules, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -456,63 +586,107 @@ class EvaluateOutcomeView(APIView):
 
 
 
-
-
 class ClientSubmissionView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsCompanyAdminOrStaff]
 
-
     def post(self, request, format=None):
         data = request.data
-        
+
         try:
             user = request.user
             submitted_by = user
 
-            try:
-                # Check if the user is an admin of any company
-                company = Company.objects.filter(admin=user).first()
-                if not company:
-                    # Check if the user is a staff of any company
+            # Identify the company (either as an admin or staff)
+            company = Company.objects.filter(admin=user).first()
+            if not company:
+                try:
                     staff_profile = CompanyStaff.objects.get(user=user)
                     company = staff_profile.company
-            except CompanyStaff.DoesNotExist:
-                return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
-            
-            evaluation_outcome = EvaluationOutcome.objects.get(id=data['generated_outcome'])
-            # Create the client submission
-            submission = ClientSubmission.objects.create(
-                client_name=data['client_name'],
-                client_email=data['email'],
-                client_phone=data['phone'],
+                except CompanyStaff.DoesNotExist:
+                    return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Ensure evaluation outcome exists
+            try:
+                evaluation_outcome = EvaluationOutcome.objects.get(id=data['generated_outcome'])
+            except EvaluationOutcome.DoesNotExist:
+                return Response({'error': 'Invalid evaluation outcome ID'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check for duplicate submission**
+            existing_submission = ClientSubmission.objects.filter(
+                client_email=data['email'],  # Assuming email uniquely identifies the client
                 generated_outcome=evaluation_outcome,
-                updated_out_description=data['updated_out_description'],
-                company=company,
-                submitted_by=submitted_by,
+                company=company
+            ).first()
 
-            )
+            if existing_submission:
+                return Response({'error': 'A submission with the same response already exists for this client.'},
+                                status=status.HTTP_400_BAD_REQUEST)
 
-            # Add selected options to the submission
-            selected_options = data['selected_options']  # List of option IDs
-            for option_id in selected_options:
-                option = Option.objects.get(id=option_id)
-                updated_description = data.get('updated_description', {}).get(str(option_id), "")
-                ClientSubmissionOption.objects.create(
-                    submission=submission,
-                    option=option,
-                    updated_description=updated_description
+            # Create the client submission
+            with transaction.atomic():
+                submission = ClientSubmission.objects.create(
+                    client_name=data['client_name'],
+                    client_email=data['email'],
+                    client_phone=data['phone'],
+                    generated_outcome=evaluation_outcome,
+                    updated_out_description=data['updated_out_description'],
+                    company=company,
+                    submitted_by=submitted_by,
                 )
 
-            return Response({"message": "Client submission created successfully", "submission_id": submission.id}, status=status.HTTP_201_CREATED)
+                # Add selected options to the submission
+                selected_options = data.get('selected_options', [])  # List of option IDs
+                for option_id in selected_options:
+                    try:
+                        option = Option.objects.get(id=option_id)
+                        updated_description = data.get('updated_description', {}).get(str(option_id), "")
+                        ClientSubmissionOption.objects.create(
+                            submission=submission,
+                            option=option,
+                            updated_description=updated_description
+                        )
+                    except Option.DoesNotExist:
+                        return Response({'error': f'Option with ID {option_id} not found'},
+                                        status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({"message": "Client submission created successfully", "submission_id": submission.id},
+                            status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
+
+
+
+
+class ClientSubmissionListView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsCompanyAdminOrStaff]
+
+    def get(self, request):
+        try:
+            user = request.user
+
+            # Identify the company (either as an admin or staff)
+            company = Company.objects.filter(admin=user).first()
+            if not company:
+                try:
+                    staff_profile = CompanyStaff.objects.get(user=user)
+                    company = staff_profile.company
+                except CompanyStaff.DoesNotExist:
+                    return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Fetch submissions for the identified company
+            submissions = ClientSubmission.objects.all()
+
+            serializer = ClientSubmissionSerializer(submissions, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-# class CompanyListAPIView(APIView):
 
-#     def get(self, request):
-#         companies = Company.objects.all()
-#         serializer = CompanySerializer(companies, many=True)
-#         return Response(serializer.data, status=status.HTTP_200_OK)
+
+

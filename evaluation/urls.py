@@ -10,10 +10,12 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
-    path('upsert_company/', CompanyCreateOrUpdateAPIView.as_view(), name='add_company'),
+    path('add_company/', CompanyCreateAPIView.as_view(), name='add_company'),
+    path('update_company/', CompanyUpdateAPIView.as_view(), name='update_company'),
     path('delete_company/<int:company_id>/', DeleteCompanyAPIView.as_view(), name='delete_company'),
 
-    path('upsert_staff/', AddCompanyStaffAPIView.as_view(), name='add_company_staff'),
+    path('add_staff/', AddCompanyStaffAPIView.as_view(), name='add_company_staff'),
+    path('update_staff/', UpdateCompanyStaffAPIView.as_view(), name='update_company_staff'),
     path('delete_staff/<int:staff_id>/', DeleteStaffAPIView.as_view(), name='delete_staff'),
     path('get_company_details/', ListCompanyAPIView.as_view(), name='get_company_details'),
     
@@ -28,6 +30,7 @@ urlpatterns = [
     path('get_evaluation/', EvaluateOutcomeView.as_view(), name='get_evaluation'),
 
     path('submissions/', ClientSubmissionView.as_view(), name='client-submission-create'),
+    path('get_submissions/', ClientSubmissionListView.as_view(), name='get-client-submission'),
     
     
     
