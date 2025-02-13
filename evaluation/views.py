@@ -11,7 +11,9 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db import IntegrityError, transaction
-from django.db.models import Prefetch
+import base64
+import io
+from django.core.files.base import ContentFile
 
 
 # Create your views here.
@@ -637,10 +639,13 @@ class ClientSubmissionView(APIView):
 
                 # Add selected options to the submission
                 selected_options = data.get('selected_options', [])  # List of option IDs
+
                 for option_id in selected_options:
                     try:
                         option = Option.objects.get(id=option_id)
-                        updated_description = data.get('updated_description', {}).get(str(option_id), "")
+                        updated_description_dict = data.get('updated_description', {})
+                        updated_description = updated_description_dict.get(str(option_id), "")
+
                         ClientSubmissionOption.objects.create(
                             submission=submission,
                             option=option,
@@ -649,6 +654,7 @@ class ClientSubmissionView(APIView):
                     except Option.DoesNotExist:
                         return Response({'error': f'Option with ID {option_id} not found'},
                                         status=status.HTTP_400_BAD_REQUEST)
+
 
             return Response({"message": "Client submission created successfully", "submission_id": submission.id},
                             status=status.HTTP_201_CREATED)
@@ -668,24 +674,111 @@ class ClientSubmissionListView(APIView):
         try:
             user = request.user
 
-            # Identify the company (either as an admin or staff)
-            company = Company.objects.filter(admin=user).first()
-            if not company:
-                try:
-                    staff_profile = CompanyStaff.objects.get(user=user)
-                    company = staff_profile.company
-                except CompanyStaff.DoesNotExist:
-                    return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            # Fetch submissions for the identified company
-            submissions = ClientSubmission.objects.all()
+            if user.is_superuser:  
+                # Fetch submissions for the identified company
+                submissions = ClientSubmission.objects.all()
 
-            serializer = ClientSubmissionSerializer(submissions, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            else:  
+                # If user is a Company Admin or Staff, fetch rules only for their company
+                if hasattr(user, "company"):
+                    company = user.company
+                    submissions = ClientSubmission.objects.filter(company=company)
+                elif hasattr(user, "staff_profile"):
+                    company = user.staff_profile.company
+                    submissions = ClientSubmission.objects.filter(submitted_by=user)
+
+                else:
+                    return Response({"error": "User is not associated with any company."}, status=status.HTTP_403_FORBIDDEN)
+
+
+
+
+                serializer = ClientSubmissionSerializer(submissions, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+
+class ClientSubmissionListByIdView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsCompanyAdminOrStaff]
+
+    def get(self, request, submission_id):
+        try:
+            user = request.user
+
+            if user.is_superuser:  
+                submission = ClientSubmission.objects.get(id=submission_id)
+
+            else:  
+                if hasattr(user, "company"):  # If the user is a Company Admin
+                    company = user.company
+                    submission = ClientSubmission.objects.get(company=company, id=submission_id)
+                elif hasattr(user, "staff_profile"):  # If the user is Company Staff
+                    company = user.staff_profile.company
+                    submission = ClientSubmission.objects.get(submitted_by=user, id=submission_id)
+                else:
+                    return Response({"error": "User is not associated with any company."}, status=status.HTTP_403_FORBIDDEN)
+
+            # Serialize and return data
+            serializer = ClientSubmissionSerializer(submission)  # ✅ Fixed (removed many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ClientSubmission.DoesNotExist:
+            return Response({"error": "Submission not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class DeleteSubmissionView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsCompanyAdminOrStaff | IsAgencyAdmin]
+
+    def delete(self, request, submission_id):
+        try:
+            try:
+                submissoin = ClientSubmission.objects.get(id=submission_id)
+            except EvaluationRule.DoesNotExist:
+                return Response({"error": "Submission not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            submissoin.delete()
+            return Response({'message': 'Submission deleted successfully'}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+class UploadPDFView(APIView):
+    def post(self, request, submission_id, format=None):
+        try:
+            # Get the submission instance
+            submission = get_object_or_404(ClientSubmission, id=submission_id)
+
+            # Get the base64 encoded PDF string
+            base64_pdf = request.data.get('pdf_base64', None)
+            if not base64_pdf:
+                return Response({'error': 'No PDF data provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Decode the base64 string
+            try:
+                pdf_data = base64.b64decode(base64_pdf)
+            except Exception as e:
+                return Response({'error': f'Invalid base64 encoding: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Save the decoded PDF file
+            pdf_file = ContentFile(pdf_data, name=f"submission_{submission_id}.pdf")
+            submission.pdf_file.save(pdf_file.name, pdf_file, save=True)
+
+            return Response({"message": "PDF uploaded successfully", "pdf_url": submission.pdf_file.url}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 

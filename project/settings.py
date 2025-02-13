@@ -106,6 +106,9 @@ DATABASES = {
 }
 
 
+MEDIA_URL = "/client_pdfs/"  # This is the URL where media files are served
+MEDIA_ROOT = os.path.join(BASE_DIR, "client_pdfs/")  # Folder where media files are stored
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators

@@ -37,7 +37,7 @@ class CompanySerializer(serializers.ModelSerializer):
         """Return admin user details"""
         if obj.admin:
             return {
-                "id": obj.admin.id,
+                
                 "username": obj.admin.username,
             }
         return None
@@ -116,18 +116,18 @@ class ClientSubmissionOptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ClientSubmissionOption
-        fields = ['id', 'submission', 'option', 'option_id', 'updated_description']
+        fields = ['id', 'option', 'option_id', 'updated_description']
 
 
 class ClientSubmissionSerializer(serializers.ModelSerializer):
     selected_options = ClientSubmissionOptionSerializer(many=True, source='submission_options', read_only=True)
     generated_outcome = serializers.PrimaryKeyRelatedField(queryset=EvaluationOutcome.objects.all())
-
+    
     class Meta:
         model = ClientSubmission
         fields = [
             'id', 'client_name', 'client_email', 'client_phone',
-            'generated_outcome', 'updated_out_description', 'company',
+            'generated_outcome','pdf_file', 'updated_out_description', 'company',
             'submitted_by', 'selected_options'
         ]
 

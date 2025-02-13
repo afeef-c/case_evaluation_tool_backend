@@ -102,8 +102,8 @@ let clientRes= {
     "updated_out_description":"Checking updated_out_description!",
     "selected_options": [1, 3],
     "updated_description": {
-      "1": "Updated description for option 1",
-      "3": "Updated description for option 3"
+      1: "Updated description for option 1",
+      3: "Updated description for option 3"
     }
   }
   
