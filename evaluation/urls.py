@@ -33,7 +33,7 @@ urlpatterns = [
     path('add_submissions_pdf/<int:submission_id>/', UploadPDFView.as_view(), name='client-submission-pdf'),
     path('delete_submissions/<int:submission_id>/', DeleteSubmissionView.as_view(), name='client-submission-delete'),
     path('get_submissions/', ClientSubmissionListView.as_view(), name='get-client-submission'),
-    path('get_submissions/<int:submission_id>/', ClientSubmissionListByIdView.as_view(), name='get-client-submission-by-id'),
+    path('get_submission/<int:submission_id>/', ClientSubmissionListByIdView.as_view(), name='get-client-submission-by-id'),
     
     
     
