@@ -7,8 +7,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
     path('login/',Login.as_view()),
-    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
 
     path('add_company/', CompanyCreateAPIView.as_view(), name='add_company'),
     path('update_company/', CompanyUpdateAPIView.as_view(), name='update_company'),
@@ -21,9 +21,12 @@ urlpatterns = [
     
     path('upsert_fields_and_options/',AddFieldsView.as_view()),
     path('get_fields/', FieldListView.as_view(), name='field_list'),
+    path('get_evaluation_out/',ListEvluationRulesView.as_view()),
+    
 
     path('add_rule/',AddRulesView.as_view()),
     path('get_rules/',ListRulesView.as_view()),
+    
     path('update_rule/<int:rule_id>/', UpdateRuleView.as_view(), name='update_rule'),
     
     path('delete_rule/<int:rule_id>/', DeleteRuleView.as_view(), name='delete_rule'),

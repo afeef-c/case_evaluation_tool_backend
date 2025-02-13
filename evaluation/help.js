@@ -46,18 +46,40 @@ let fieldsData = {
                     "description": "wewewew wewewe ewewh fererre"
                 }
             ]
-        }
-    ],
-    "case_evaluation_options": [
-        {
-            "name": "Signed",
-            "description": "fgdgd tjtetheht h gdggdgd"
         },
         {
-            "name": "Declined",
-            "description": "wewewew wewewe ewewh fererre"
-        }
+            "name": "Case Evaluation",
+            "options": [
+                {
+                    "name": "Signed",
+                    "description": "fgdgd tjtetheht h gdggdgd"
+                },
+                {
+                    "name": "Declined",
+                    "description": "wewewew wewewe ewewh fererre"
+                }
+            ]
+        },
+
+        // for udpate field and options with id will update existing data
+        {
+            "id": 19,
+           "name": "Physical Injury1.1",
+           "options": [
+               {   
+                   "id":37,
+                   "name": "Significant",
+                   "description": "testt tjtetheht h rerhehrerierherehrer"
+               },
+               {
+                   "name": "New Standard ",
+                   "description": "testt tjtereretheht h fererre"
+               }
+           ]
+       }
+
     ]
+    
 }
 
 
@@ -66,15 +88,24 @@ let rulesData = {
     
     "field_options": [
         {
+            "field_id":9,
             "name": "Physical Injury",
-            "option": "Significant/Severe"
+            "option": "Significant/Severe",
+            "description": "testt tjtetheht h rerhehrerierherehrer"
         },
-        {
+        {    
+            "field_id":10,
             "name": "Treatment",
-            "option": "Immediate and ongoing"
+            "option": "Immediate and ongoing",
+            "description": "fgdgd tjtetheht h gdggdgd"
+        },
+        {    
+            "field_id":9,
+            "name": "Case Evaluation",
+            "option": "Signed",
+            "description": "fgdgd tjtetheht h gdggdgd"
         }
-    ],
-    "case_evaluation": "Signed"
+    ]
 }
 
 //  get_evaluation
@@ -104,9 +135,37 @@ let clientRes= {
     "updated_description": {
       1: "Updated description for option 1",
       3: "Updated description for option 3"
-    }
+    },
+
+    "client_name": "John Doe",
+    "email": "john@example.com",
+    "phone": "+1234567890",
+    "field_options": [
+        {
+            field_id : 2,
+            name: "Physical Injury",
+            option: "Significant/Severe",
+            description : "eryeuyrgeuhfbhdhf"
+        },
+        {
+            field_id : 3,
+            name: "Treatment",
+            option: "Immediate and ongoing",
+            description : "eryeuyrgeuhfbhdhf"
+        },
+        {
+            field_id : 5,
+            name: "Case Evaluation",
+            option: "Signed",
+            description : "eryeuyrgeuhfbhdhf"
+        },
+    ]
   }
   
+
+    
+  
+
 
 
 //respose after first submission

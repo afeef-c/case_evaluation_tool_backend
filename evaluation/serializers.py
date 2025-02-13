@@ -1,6 +1,63 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Company,CompanyStaff, Field,Option,EvaluationRule,EvaluationOutcome,EvaluationRuleCondition,ClientSubmission,ClientSubmissionOption
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import AccessToken,RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        if user.is_superuser:
+            role = "Agency Admin"
+        elif user.is_staff and hasattr(user, 'company'):
+            role = "Company Admin"
+        elif hasattr(user, 'staff_profile'):
+            role = "Company Staff"
+        else:
+            role = None
+
+        # Add custom claims
+        token['username'] = user.username
+        token['role'] = role  
+
+        return token
+
+
+class CustomTokenRefreshSerializer(TokenRefreshSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        # Extract user ID from the refresh token
+        refresh = RefreshToken(attrs["refresh"])
+        user_id = refresh.payload.get("user_id")
+
+        # Fetch user from database
+        user = User.objects.filter(id=user_id).first()
+
+        if not user:
+            raise serializers.ValidationError("Invalid token: user does not exist")
+
+        # Create a new customized access token
+        access = AccessToken.for_user(user)
+        access["username"] = user.username
+
+        # Assign role based on user type
+        if user.is_superuser:
+            access["role"] = "Agency Admin"
+        elif user.is_staff and hasattr(user, "company"):
+            access["role"] = "Company Admin"
+        elif hasattr(user, "staff_profile"):
+            access["role"] = "Company Staff"
+        else:
+            access["role"] = None
+
+        # Replace the default access token with the customized one
+        data["access"] = str(access)
+        return data
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -88,7 +145,7 @@ class EvaluationOutcomeSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = EvaluationOutcome
-        fields = ['company','name','description']
+        fields = ['id','company','name','description']
 
 
 

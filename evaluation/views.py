@@ -14,54 +14,59 @@ from django.db import IntegrityError, transaction
 import base64
 import io
 from django.core.files.base import ContentFile
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 
-# Create your views here.
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    serializer_class = CustomTokenRefreshSerializer
+
+
+# login view
 class Login(APIView):
-    
     def post(self, request):
-        
         try:
-            data=request.data
-            username=data['username']
-            password=data['password']
+            data = request.data
+            username = data.get('username')
+            password = data.get('password')
             user = authenticate(request, username=username, password=password)
 
             if user:
-                
+                login(request, user)
+                token = RefreshToken.for_user(user)
 
-                    login(request, user)
-                    token = RefreshToken.for_user(user)
-                    if user.is_superuser:
-                        role = "Agency Admin"
-                    elif user.is_staff and hasattr(user, 'company'):
-                        role = "Company Admin"
-                    elif hasattr(user, 'staff_profile'):
-                        role = "Company Staff"
-                    else:
-                        role = None
-                        
-                    
-                    # add role in response
-                    return Response({
-                        'message': 'You are successfully logged in.',
-                        'refresh': str(token),
-                        'access': str(token.access_token),
-                        'username': user.username,
-                        'role' : role
-                        
-                    },status=200)
-            else:
+                # Add role and username inside the access token
+                token['username'] = user.username
+                if user.is_superuser:
+                    token['role'] = "Agency Admin"
+                elif user.is_staff and hasattr(user, 'company'):
+                    token['role'] = "Company Admin"
+                elif hasattr(user, 'staff_profile'):
+                    token['role'] = "Company Staff"
+                else:
+                    token['role'] = None
+
                 return Response({
-                    'message': 'Invalid username or password.'
-                }, status=404)
+                    'message': 'You are successfully logged in.',
+                    'refresh': str(token),
+                    'access': str(token.access_token)
+                }, status=200)
+            else:
+                return Response({'message': 'Invalid username or password.'}, status=404)
 
         except Exception as e:
             return Response({
-                    'error': str(e)+' missing' ,
-                    'message':"Incomplete request data"
-                            },status=400)
-        
+                'error': str(e) + ' missing',
+                'message': "Incomplete request data"
+            }, status=400)
+
+
+
+
 
 # add company
 class CompanyCreateAPIView(APIView):
@@ -337,19 +342,49 @@ class AddFieldsView(APIView):
             data = request.data
             company = Company.objects.get(admin=request.user)
 
-            # Delete all existing fields and evaluation outcomes for the company
-            Field.objects.filter(company=company).delete()
-            EvaluationOutcome.objects.filter(company=company).delete()
 
             # Add new fields and options
             for field_data in data.get('field_options', []):
-                field = Field.objects.create(company=company, name=field_data['name'])
-                for option_data in field_data.get('options', []):
-                    Option.objects.create(field=field, value=option_data['name'], description=option_data['description'])
+                field_id = field_data.get('id')
+                name=field_data['name']
+                if name!="Case Evaluation":
+                    if field_id:
+                        field = Field.objects.filter(id=field_id, company=company).first()
+                        if field:
+                            field.name = name
+                            field.save()
+                        else:
+                            return Response({"error": f"Field with id {field_id} not found."}, status=404)
+                    else:
+                        field = Field.objects.create(company=company, name=name)
+                    
+                    for option_data in field_data.get('options', []):
+                        option_id = option_data.get('id')
+                        if option_id:
+                            option = Option.objects.filter(id=option_id, field=field).first()
+                            if option:
+                                option.value = option_data['name']
+                                option.description = option_data['description']
+                                option.save()
+                            else:
+                                return Response({"error": f"Option with id {option_id} not found."}, status=404)
+                        else:
+                            Option.objects.create(field=field, value=option_data['name'], description=option_data['description'])
+                
+                else:
+                    
+                    for eval_option in field_data.get('options', []):
+                        eval_id = eval_option.get('id')
+                        if eval_id:
+                            eval_outcome = EvaluationOutcome.objects.filter(id=eval_id, company=company).first()
+                            if eval_outcome:
+                                eval_outcome.name = eval_option['name']
+                                eval_outcome.description = eval_option['description']
+                                eval_outcome.save()
+                            else:
+                                return Response({"error": f"EvaluationOutcome with id {eval_id} not found."}, status=404)
+                        EvaluationOutcome.objects.create(company=company, name=eval_option['name'], description=eval_option['description'])
 
-            # Add new evaluation outcomes
-            for eval_option in data.get('case_evaluation_options', []):
-                EvaluationOutcome.objects.create(company=company, name=eval_option['name'], description=eval_option['description'])
 
             return Response({"message": "Fields and options added successfully."}, status=201)
 
@@ -369,6 +404,7 @@ class FieldListView(APIView):
         # if agency admin get all feilds 
         if user.is_superuser:
             fields = Field.objects.all()
+            eval = EvaluationOutcome.objects.all()
         
         else:  
             # If user is a Company Admin or Staff, fetch feilds only for their company
@@ -381,8 +417,39 @@ class FieldListView(APIView):
 
             # rules = EvaluationRuleCondition.objects.filter(company=company)
             fields = Field.objects.filter(company=company)
+            eval = EvaluationOutcome.objects.filter(company=company)
+            
 
-        serializer = FieldSerializer(fields, many=True)
+        fields_serializer  = FieldSerializer(fields, many=True)
+        evaluations_serializer  = EvaluationOutcomeSerializer(eval, many=True)
+
+        return Response({'feilds':fields_serializer.data,
+                        'evaluations':evaluations_serializer.data},
+                         status=status.HTTP_200_OK)
+
+
+class ListEvluationRulesView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsCompanyAdminOrStaff | IsAgencyAdmin]
+
+
+    def get(self, request):
+        user = self.request.user
+        if user.is_superuser:
+            rules = EvaluationOutcome.objects.all()
+        else:
+            # If user is a Company Admin or Staff, fetch feilds only for their company
+            if hasattr(user, "company"):
+                company = user.company
+            elif hasattr(user, "staff_profile"):
+                company = user.staff_profile.company
+            else:
+                return Response({"error": "User is not associated with any company."}, status=status.HTTP_403_FORBIDDEN)
+
+            rules= EvaluationOutcome.objects.filter(company=company)
+
+
+        serializer = EvaluationOutcomeSerializer(rules, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -396,7 +463,7 @@ class AddRulesView(APIView):
             data = request.data
 
             # Ensure required fields exist
-            required_fields = [ 'field_options', 'case_evaluation']
+            required_fields = [ 'field_options']
             if not all(field in data for field in required_fields):
                 return Response({"error": "Required fields are missing."}, status=status.HTTP_400_BAD_REQUEST)
             
@@ -409,27 +476,32 @@ class AddRulesView(APIView):
             except CompanyStaff.DoesNotExist:
                 return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
 
-
-            try:
-                evaluation_outcome = EvaluationOutcome.objects.get(company=company, name=data['case_evaluation'])
-            except EvaluationOutcome.DoesNotExist:
-                return Response({"error": "Evaluation outcome not found."}, status=status.HTTP_404_NOT_FOUND)
-
-            # Create rule
-            rule = EvaluationRule.objects.create(company=company, outcome=evaluation_outcome)
-
             # Collect options
             options = []
             for field_option in data.get('field_options', []):
-                option_name = field_option.get("option")
-                field = Field.objects.get(name=field_option.get("name"))
+                if field_option.get('name')!="Case Evaluation":
+                    option_name = field_option.get("option")
+                    field_id = field_option.get("field_id")
+                    field = Field.objects.get(id=field_id, name=field_option.get("name"))
+
+                    try:
+                        option = Option.objects.get(field =field ,value=option_name)
+                        options.append(option)
+                    except Option.DoesNotExist:
+                        return Response({"error": f"Option '{option_name}' not found."}, status=status.HTTP_404_NOT_FOUND)
+
                 
-                try:
-                    
-                    option = Option.objects.get(field =field ,value=option_name)
-                    options.append(option)
-                except Option.DoesNotExist:
-                    return Response({"error": f"Option '{option_name}' not found."}, status=status.HTTP_404_NOT_FOUND)
+                else:
+                    eval_id = field_option.get("field_id")
+                    option_name = field_option.get("option")
+                
+                    evaluation_outcome = EvaluationOutcome.objects.filter(company=company,id=eval_id).first()
+
+            if evaluation_outcome:
+                # Create rule
+                rule = EvaluationRule.objects.create(company=company, outcome=evaluation_outcome)
+            else:
+                return Response({"error": f"EvaluationOutcome with id {eval_id} not found."}, status=404)
 
             # Check if a rule condition with the same set of options exists
             existing_conditions = EvaluationRuleCondition.objects.filter(rule__company=company)
@@ -448,6 +520,8 @@ class AddRulesView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 
 class ListRulesView(APIView):
@@ -608,60 +682,66 @@ class ClientSubmissionView(APIView):
                 except CompanyStaff.DoesNotExist:
                     return Response({'error': 'Company not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            # Ensure evaluation outcome exists
-            try:
-                evaluation_outcome = EvaluationOutcome.objects.get(id=data['generated_outcome'])
-            except EvaluationOutcome.DoesNotExist:
-                return Response({'error': 'Invalid evaluation outcome ID'}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Check for duplicate submission**
-            existing_submission = ClientSubmission.objects.filter(
-                client_email=data['email'],  # Assuming email uniquely identifies the client
-                generated_outcome=evaluation_outcome,
-                company=company
-            ).first()
-
-            if existing_submission:
-                return Response({'error': 'A submission with the same response already exists for this client.'},
-                                status=status.HTTP_400_BAD_REQUEST)
-
             # Create the client submission
             with transaction.atomic():
                 submission = ClientSubmission.objects.create(
                     client_name=data['client_name'],
                     client_email=data['email'],
                     client_phone=data['phone'],
-                    generated_outcome=evaluation_outcome,
-                    updated_out_description=data['updated_out_description'],
                     company=company,
                     submitted_by=submitted_by,
                 )
 
                 # Add selected options to the submission
-                selected_options = data.get('selected_options', [])  # List of option IDs
+                field_options = data.get('field_options', [])  # List of option dictionaries
 
-                for option_id in selected_options:
+                for field_option in field_options:
                     try:
-                        option = Option.objects.get(id=option_id)
-                        updated_description_dict = data.get('updated_description', {})
-                        updated_description = updated_description_dict.get(str(option_id), "")
+                        field_id = field_option.get('field_id')
+                        name = field_option.get('name')
+                        option_val = field_option.get('option')
+                        n_description = field_option.get('description', "")
 
-                        ClientSubmissionOption.objects.create(
-                            submission=submission,
-                            option=option,
-                            updated_description=updated_description
-                        )
+                        if not field_id or not name or not option_val:
+                            return Response({'error': 'Missing required field in field_options'},
+                                            status=status.HTTP_400_BAD_REQUEST)
+
+                        if name != "Case Evaluation":
+                            # Fetch the field option
+                            option = Option.objects.get(field_id=field_id, value=option_val)
+
+                            # Check if description was updated
+                            updated_description = n_description if option.description != n_description else ""
+
+                            # Create ClientSubmissionOption
+                            ClientSubmissionOption.objects.create(
+                                submission=submission,
+                                option=option,
+                                updated_description=updated_description
+                            )
+
+                        else:
+                            # Case Evaluation logic
+                            evaluation = EvaluationOutcome.objects.filter(id=field_id, name=option_val).first()
+                            if not evaluation:
+                                return Response({'error': f'Evaluation outcome not found for field_id {field_id}'},
+                                                status=status.HTTP_400_BAD_REQUEST)
+
+                            updated_out_description = n_description if evaluation.description != n_description else ""
+
+                            submission.updated_out_description = updated_out_description
+                            submission.generated_outcome = evaluation
+                            submission.save()
+
                     except Option.DoesNotExist:
-                        return Response({'error': f'Option with ID {option_id} not found'},
+                        return Response({'error': f'Option "{option_val}" not found for field_id {field_id}'},
                                         status=status.HTTP_400_BAD_REQUEST)
-
 
             return Response({"message": "Client submission created successfully", "submission_id": submission.id},
                             status=status.HTTP_201_CREATED)
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
 
 
 
