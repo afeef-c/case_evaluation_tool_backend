@@ -32,7 +32,7 @@ DEBUG = os.getenv('DEBUG')
 
 ALLOWED_HOSTS = [   '127.0.0.1',
                     'localhost',
-                    '54.215.43.206',
+                    '13.56.111.133',
                     'case-evaluation-tool-backend.onrender.com']
 
 CORS_ALLOW_ALL_ORIGINS = True
