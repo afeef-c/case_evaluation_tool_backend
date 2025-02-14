@@ -15,7 +15,6 @@ urlpatterns = [
     path('delete_company/<int:company_id>/', DeleteCompanyAPIView.as_view(), name='delete_company'),
 
     path('company_data/', CompanyDataAPIView.as_view()),  # GET (all), POST
-    path('company_data/<int:pk>/', CompanyDataAPIView.as_view()),  # PUT, DELETE
 
     path('add_staff/', AddCompanyStaffAPIView.as_view(), name='add_company_staff'),
     path('update_staff/', UpdateCompanyStaffAPIView.as_view(), name='update_company_staff'),

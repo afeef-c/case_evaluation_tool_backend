@@ -5,6 +5,9 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import AccessToken,RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
+import base64
+import uuid
+from django.core.files.base import ContentFile
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -65,21 +68,31 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['username','password']
 
+class Base64ImageField(serializers.ImageField):
+    """Custom serializer field to handle base64-encoded images."""
+
+    def to_internal_value(self, data):
+        """Convert base64 string to an image file."""
+        if isinstance(data, str) and data.startswith("data:image"):
+            format_str, img_str = data.split(";base64,")
+            ext = format_str.split("/")[-1]  # Get the image extension (png, jpg, etc.)
+            img_data = base64.b64decode(img_str)  # Decode base64
+
+            filename = f"{uuid.uuid4()}.{ext}"  # Generate a unique filename
+            return ContentFile(img_data, name=filename)
+
+        return super().to_internal_value(data)
 
 class CompanyDataSerializer_(serializers.ModelSerializer):
+    logo_img = Base64ImageField(required=False)  # Ensure this field is defined
+
     class Meta:
         model = CompanyData
         fields = ['id', 'logo_img', 'color', 'footer_email', 'footer_phone', 'company']  # Ensure these fields exist
         extra_kwargs = {'company': {'read_only': True}}  # Prevent manual input of `company`
 
 
-class CompanyStaffSerializer_(serializers.ModelSerializer):
-    username = serializers.CharField(source="user.username")  # Get username from related user model
-    password = serializers.CharField(write_only=True, required=False, style={'input_type': 'password'})
 
-    class Meta:
-        model = CompanyStaff
-        fields = ['id','name', 'username', 'password']
 
 class CompanyAdminSerializer(serializers.ModelSerializer):
     class Meta:

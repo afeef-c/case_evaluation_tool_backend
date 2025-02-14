@@ -22,7 +22,7 @@ class Company(models.Model):
 
 class CompanyData(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE)
-    logo_img = models.FileField(upload_to='client_pdfs/', null=True, blank=True)
+    logo_img = models.ImageField(upload_to='client_pdfs/', null=True, blank=True)
     color = models.CharField(max_length=255, null=True, blank=True)
     footer_email=models.CharField(max_length=255, null=True, blank=True)
     models.CharField(max_length=255, null=True, blank=True)
