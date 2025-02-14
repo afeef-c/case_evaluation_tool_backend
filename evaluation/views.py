@@ -540,18 +540,17 @@ class AddRulesView(APIView):
             for field_option in data.get('field_options', []):
                 if field_option.get('name')!="Case Evaluation":
                     option_name = field_option.get("option")
-                    field_id = field_option.get("field_id")
-                    field = Field.objects.get(id=field_id, name=field_option.get("name"))
+                    option_id = field_option.get("option_id")
 
                     try:
-                        option = Option.objects.get(field =field ,value=option_name)
+                        option = Option.objects.get(id= option_id ,value=option_name)
                         options.append(option)
                     except Option.DoesNotExist:
-                        return Response({"error": f"Option '{option_name}' not found."}, status=status.HTTP_404_NOT_FOUND)
+                        return Response({"error": f"Option '{option_id}' not found."}, status=status.HTTP_404_NOT_FOUND)
 
                 
                 else:
-                    eval_id = field_option.get("field_id")
+                    eval_id = field_option.get("option_id")
                     option_name = field_option.get("option")
                 
                     evaluation_outcome = EvaluationOutcome.objects.filter(company=company,id=eval_id).first()

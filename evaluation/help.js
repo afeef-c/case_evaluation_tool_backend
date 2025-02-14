@@ -88,19 +88,19 @@ let rulesData = {
     
     "field_options": [
         {
-            "field_id":9,
+            "option_id":9,
             "name": "Physical Injury",
             "option": "Significant/Severe",
             "description": "testt tjtetheht h rerhehrerierherehrer"
         },
         {    
-            "field_id":10,
+            "option_id":10,
             "name": "Treatment",
             "option": "Immediate and ongoing",
             "description": "fgdgd tjtetheht h gdggdgd"
         },
         {    
-            "field_id":9,
+            "option_id":9,
             "name": "Case Evaluation",
             "option": "Signed",
             "description": "fgdgd tjtetheht h gdggdgd"
