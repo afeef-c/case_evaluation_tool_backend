@@ -175,6 +175,46 @@ class DeleteCompanyAPIView(APIView):
         
 
 
+
+class CompanyDataAPIView(APIView):
+    permission_classes = [IsCompanyAdmin | IsAgencyAdmin]
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            company = Company.objects.get(admin=request.user)
+        except Company.DoesNotExist:
+            return Response({"error": "You are not authorized to modify this data."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Get or create the company data
+        company_data, created = CompanyData.objects.get_or_create(company=company)
+
+        serializer = CompanyDataSerializer_(company_data, data=request.data, partial=True)  # Allow partial updates
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+    def get(self, request):
+        """
+        If the user is SuperAdmin, return all CompanyData.
+        If the user is an Agency Admin, return only their company's data.
+        """
+        if request.user.is_superuser:
+            company_data = CompanyData.objects.all()  # SuperAdmin gets all data
+        else:
+            try:
+                company = Company.objects.get(admin=request.user)
+                company_data = CompanyData.objects.filter(company=company)  # Agency Admin gets only their company data
+            except Company.DoesNotExist:
+                return Response({"error": "You are not authorized to view this data."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = CompanyDataSerializer_(company_data, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
 # add companystaff
 class AddCompanyStaffAPIView(APIView):
     permission_classes = [IsCompanyAdmin]
@@ -401,13 +441,11 @@ class FieldListView(APIView):
 
     def get(self, request):
         user = self.request.user
-        # if agency admin get all feilds 
+        
         if user.is_superuser:
             fields = Field.objects.all()
-            eval = EvaluationOutcome.objects.all()
-        
-        else:  
-            # If user is a Company Admin or Staff, fetch feilds only for their company
+            evaluations = EvaluationOutcome.objects.all()
+        else:
             if hasattr(user, "company"):
                 company = user.company
             elif hasattr(user, "staff_profile"):
@@ -415,17 +453,38 @@ class FieldListView(APIView):
             else:
                 return Response({"error": "User is not associated with any company."}, status=status.HTTP_403_FORBIDDEN)
 
-            # rules = EvaluationRuleCondition.objects.filter(company=company)
             fields = Field.objects.filter(company=company)
-            eval = EvaluationOutcome.objects.filter(company=company)
+            evaluations = EvaluationOutcome.objects.filter(company=company)
+        
+        # Serialize Fields
+        fields_serializer = FieldSerializer(fields, many=True)
+        
+        # Transform Evaluations into Field-like structure
+        transformed_evaluations = [{
+            "id":None,
+            "name": "Case Evaluation",
+            "company": evaluations[0].company.id if evaluations and evaluations[0].company else None,
+            "options": [
+                {
+                    "id": eval_obj.id,
+                    # "field": eval_obj.id,
+                    "value": eval_obj.name,
+                    "description": eval_obj.description
+                }
+                for eval_obj in evaluations
+            ]
+        }] if evaluations else None  # Ensure it doesn't break if evaluations is empty
+
             
+        
+        
+        # Merge Fields and Transformed Evaluations
+        combined_data = fields_serializer.data + transformed_evaluations
 
-        fields_serializer  = FieldSerializer(fields, many=True)
-        evaluations_serializer  = EvaluationOutcomeSerializer(eval, many=True)
+        return Response(combined_data, status=status.HTTP_200_OK)
 
-        return Response({'feilds':fields_serializer.data,
-                        'evaluations':evaluations_serializer.data},
-                         status=status.HTTP_200_OK)
+
+
 
 
 class ListEvluationRulesView(APIView):

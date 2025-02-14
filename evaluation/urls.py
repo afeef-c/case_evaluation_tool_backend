@@ -14,6 +14,9 @@ urlpatterns = [
     path('update_company/', CompanyUpdateAPIView.as_view(), name='update_company'),
     path('delete_company/<int:company_id>/', DeleteCompanyAPIView.as_view(), name='delete_company'),
 
+    path('company_data/', CompanyDataAPIView.as_view()),  # GET (all), POST
+    path('company_data/<int:pk>/', CompanyDataAPIView.as_view()),  # PUT, DELETE
+
     path('add_staff/', AddCompanyStaffAPIView.as_view(), name='add_company_staff'),
     path('update_staff/', UpdateCompanyStaffAPIView.as_view(), name='update_company_staff'),
     path('delete_staff/<int:staff_id>/', DeleteStaffAPIView.as_view(), name='delete_staff'),
@@ -26,9 +29,7 @@ urlpatterns = [
 
     path('add_rule/',AddRulesView.as_view()),
     path('get_rules/',ListRulesView.as_view()),
-    
     path('update_rule/<int:rule_id>/', UpdateRuleView.as_view(), name='update_rule'),
-    
     path('delete_rule/<int:rule_id>/', DeleteRuleView.as_view(), name='delete_rule'),
     path('get_evaluation/', EvaluateOutcomeView.as_view(), name='get_evaluation'),
 

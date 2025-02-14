@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Company,CompanyStaff, Field,Option,EvaluationRule,EvaluationOutcome,EvaluationRuleCondition,ClientSubmission,ClientSubmissionOption
+from .models import Company,CompanyStaff,CompanyData, Field,Option,EvaluationRule,EvaluationOutcome,EvaluationRuleCondition,ClientSubmission,ClientSubmissionOption
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import AccessToken,RefreshToken
@@ -64,6 +64,14 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['username','password']
+
+
+class CompanyDataSerializer_(serializers.ModelSerializer):
+    class Meta:
+        model = CompanyData
+        fields = ['id', 'logo_img', 'color', 'footer_email', 'footer_phone', 'company']  # Ensure these fields exist
+        extra_kwargs = {'company': {'read_only': True}}  # Prevent manual input of `company`
+
 
 class CompanyStaffSerializer_(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username")  # Get username from related user model
@@ -130,7 +138,7 @@ class CompanyStaffSerializer(serializers.ModelSerializer):
 class OptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Option
-        fields = ['id', 'field', 'value', 'description']
+        fields = ['id', 'value', 'description']
 
 
 class FieldSerializer(serializers.ModelSerializer):

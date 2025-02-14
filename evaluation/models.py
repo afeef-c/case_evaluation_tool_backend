@@ -20,6 +20,18 @@ class Company(models.Model):
     def __str__(self):
         return self.company_name
 
+class CompanyData(models.Model):
+    company = models.OneToOneField(Company, on_delete=models.CASCADE)
+    logo_img = models.FileField(upload_to='client_pdfs/', null=True, blank=True)
+    color = models.CharField(max_length=255, null=True, blank=True)
+    footer_email=models.CharField(max_length=255, null=True, blank=True)
+    models.CharField(max_length=255, null=True, blank=True)
+    footer_phone=models.CharField(max_length=255, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.company.name} Data"
+    
+
 
 class CompanyStaff(models.Model):
     name = models.CharField(max_length=255, null=True, blank=True)
